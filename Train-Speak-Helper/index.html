@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="車内自動放送プレイヤー用のZipファイル作成ツール。設定ファイル（config.json）と音声ファイルから構成されたZipファイルを簡単に作成できます。">
+    <meta name="keywords" content="車内放送,自動放送,プレイヤー,設定ツール,音声ファイル,config.json">
+    <meta name="author" content="Train-Speak Helper">
+    <meta name="robots" content="index, follow">
+
+    <!-- OGP Meta Tags -->
+    <meta property="og:title" content="車内自動放送プレイヤー構成ヘルパー">
+    <meta property="og:description" content="車内自動放送プレイヤー用のZipファイル作成ツール">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ja_JP">
+
+    <!-- パフォーマンス最適化 -->
+    <meta name="theme-color" content="#3498db">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+
+    <title>車内自動放送プレイヤー構成ヘルパー</title>
+
+    <!-- Critical CSS Inline (将来的に検討) -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- JavaScript の非同期読み込み -->
+    <script>
+        // 早期エラーキャッチャー
+        window.addEventListener('error', function (e) {
+            console.error('Early error:', e.error);
+        });
+    </script>
+</head>
+
+<body>
+    <!-- メインコンテナ -->
+    <div class="container" role="main">
+        <header>
+            <h1>車内自動放送プレイヤー構成ヘルパー</h1>
+            <p class="description">
+                車内自動放送プレイヤー用のZipファイルを作成するためのヘルパーツールです。
+                設定ファイル（config.json）と音声ファイルから構成されたZipファイルを簡単に作成できます。
+            </p>
+        </header>
+
+        <!-- データ構造の説明 -->
+        <details class="system-info">
+            <summary>📋 システム概要とデータ構造</summary>
+            <div class="info-grid">
+                <div class="info-item">
+                    <h4>🧩 パーツ設定 (PartConfig)</h4>
+                    <ul>
+                        <li><strong>id:</strong> パーツの一意識別子</li>
+                        <li><strong>text:</strong> 表示テキスト</li>
+                        <li><strong>audio:</strong> 音声ファイル名</li>
+                    </ul>
+                </div>
+                <div class="info-item">
+                    <h4>📝 文章設定 (SentenceConfig)</h4>
+                    <ul>
+                        <li><strong>text:</strong> 文章の説明</li>
+                        <li><strong>partIds:</strong> 使用するパーツIDの配列</li>
+                    </ul>
+                </div>
+                <div class="info-item">
+                    <h4>🎯 対応ファイル形式</h4>
+                    <ul>
+                        <li><strong>音声:</strong> .wav, .mp3</li>
+                        <li><strong>設定:</strong> config.json</li>
+                        <li><strong>出力:</strong> .zip</li>
+                    </ul>
+                </div>
+            </div>
+        </details>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('parts')">音声パーツ管理</button>
+            <button class="tab-btn" onclick="showTab('sentences')">文章パターン管理</button>
+            <button class="tab-btn" onclick="showTab('export')">設定ファイル出力</button>
+            <button class="tab-btn" onclick="showTab('tools')">音声作成ツール</button>
+        </div>
+
+        <!-- 音声パーツ管理タブ -->
+        <div id="parts-tab" class="tab-content active">
+            <h2>音声パーツ管理</h2>
+
+            <!-- エラー・警告表示エリア -->
+            <div id="parts-messages" class="messages-area" style="display: none;"></div>
+
+            <div class="section">
+                <h3>新しいパーツを追加</h3>
+                <form id="add-part-form" onsubmit="return false;" class="part-form">
+                    <div class="form-group">
+                        <label for="part-id">ID <span class="required">*</span>:</label>
+                        <div class="input-with-buttons">
+                            <input type="text" id="part-id" placeholder="例: nagoya" required
+                                onkeydown="handleFormKeydown(event)" onkeyup="updatePreview()">
+                            <button type="button" onclick="generateIdFromText()" class="btn btn-small">🤖 AI生成</button>
+                            <button type="button" onclick="showDictionary()" class="btn btn-small btn-info">📚
+                                辞書</button>
+                            <button type="button" onclick="clearForm()" class="btn btn-small btn-secondary">🗑️
+                                クリア</button>
+                        </div>
+                        <small class="form-help">英数字とアンダースコアのみ。AI生成機能で形態素解析による最適なIDを自動作成できます。</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="part-text">表示テキスト <span class="required">*</span>:</label>
+                        <input type="text" id="part-text" placeholder="例: 名古屋" onkeyup="enhancedSuggestIdFromText()"
+                            onkeydown="handleFormKeydown(event)" required>
+                        <small class="reading-hint" id="reading-hint"></small>
+                        <small class="form-help">プレイヤーで表示されるテキストです。入力と同時にIDの候補を提案します。</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="part-audio">音声ファイル <span class="required">*</span>:</label>
+                        <div class="file-input-wrapper" id="file-drop-zone">
+                            <input type="file" id="part-audio" accept=".wav,.mp3" required
+                                onchange="handleFileSelect(event)">
+                            <div class="file-drop-hint">
+                                <span class="drop-text">ここに音声ファイルをドロップするか、クリックして選択</span>
+                                <span class="file-info" id="file-info" style="display: none;"></span>
+                            </div>
+                        </div>
+                        <small class="form-help">対応形式: .wav, .mp3 (ドラッグ&ドロップ対応)</small>
+                    </div>
+
+                    <!-- プレビュー表示 -->
+                    <div id="part-preview" class="part-preview" style="display: none;">
+                        <h4>📋 追加内容プレビュー</h4>
+                        <div class="preview-content">
+                            <div class="preview-item">
+                                <span class="preview-label">ID:</span>
+                                <span id="preview-id"></span>
+                            </div>
+                            <div class="preview-item">
+                                <span class="preview-label">テキスト:</span>
+                                <span id="preview-text"></span>
+                            </div>
+                            <div class="preview-item">
+                                <span class="preview-label">音声ファイル:</span>
+                                <span id="preview-audio"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" onclick="addPart()" class="btn btn-primary" id="add-part-btn">
+                            <span class="btn-icon">✨</span>パーツを追加
+                        </button>
+                        <button type="button" onclick="addPartAndContinue()" class="btn btn-success"
+                            id="add-continue-btn">
+                            <span class="btn-icon">➕</span>追加して続ける
+                        </button>
+                    </div>
+                </form>
+
+                <div class="quick-tips">
+                    <h4>💡 クイック操作</h4>
+                    <ul>
+                        <li><kbd>Tab</kbd>: 次の項目へ移動</li>
+                        <li><kbd>Enter</kbd>: パーツを追加</li>
+                        <li><kbd>Ctrl + Enter</kbd>: 追加して続ける</li>
+                        <li><kbd>Esc</kbd>: フォームをクリア</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>登録済みパーツ一覧</h3>
+                <div class="search-box">
+                    <input type="text" id="parts-search" placeholder="パーツを検索..." onkeyup="filterParts()">
+                    <button onclick="loadSampleData()" class="btn btn-small"
+                        style="margin-left: 10px;">サンプルデータ読み込み</button>
+                </div>
+                <div id="parts-list" class="parts-list"></div>
+            </div>
+
+            <!-- 補助機能 -->
+            <details class="advanced-features">
+                <summary>🔧 高度な機能・便利ツール</summary>
+
+                <!-- カスタム辞書管理 -->
+                <div class="sub-section">
+                    <h4>📖 カスタム辞書管理</h4>
+                    <p class="small-info">AI ID生成機能に新しい単語を追加して、より多様なテキストに対応できます。</p>
+
+                    <div class="custom-dict-input">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="custom-word">単語:</label>
+                                <input type="text" id="custom-word" placeholder="例: 渋谷">
+                            </div>
+                            <div class="form-group">
+                                <label for="custom-reading">読み:</label>
+                                <input type="text" id="custom-reading" placeholder="例: しぶや">
+                            </div>
+                            <div class="form-group">
+                                <label for="custom-romaji">ローマ字:</label>
+                                <input type="text" id="custom-romaji" placeholder="例: shibuya">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="custom-type">品詞:</label>
+                                <select id="custom-type">
+                                    <option value="地名">地名</option>
+                                    <option value="列車種別">列車種別</option>
+                                    <option value="副詞">副詞</option>
+                                    <option value="名詞">名詞</option>
+                                    <option value="動詞">動詞</option>
+                                    <option value="連体詞">連体詞</option>
+                                    <option value="接尾辞">接尾辞</option>
+                                    <option value="助詞">助詞</option>
+                                    <option value="語尾">語尾</option>
+                                    <option value="数詞">数詞</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="custom-short">短縮ID:</label>
+                                <input type="text" id="custom-short" placeholder="例: shibuya（省略可）">
+                            </div>
+                        </div>
+                        <div class="custom-dict-buttons">
+                            <button onclick="addCustomDictEntry()" class="btn btn-small btn-success">辞書に追加</button>
+                            <button onclick="showCustomDictManager()" class="btn btn-small btn-info">辞書管理</button>
+                            <button onclick="importDictFile()" class="btn btn-small">📂 辞書ファイル読み込み</button>
+                            <button onclick="exportDictFile()" class="btn btn-small">💾 辞書ファイル出力</button>
+                        </div>
+                        <input type="file" id="dict-file-input" accept=".json" style="display: none;"
+                            onchange="handleDictFileImport(event)">
+                    </div>
+
+                    <!-- パターン生成機能 -->
+                    <div class="pattern-generation">
+                        <h5>📝 パターン生成機能</h5>
+                        <p class="small-info">「<駅名>行」「<駅名>と」などのパターンを自動生成します。</p>
+
+                        <div class="form-group">
+                            <label for="pattern-template">パターンテンプレート:</label>
+                            <input type="text" id="pattern-template" placeholder="例: <駅名>行き, <駅名>と<駅名>, <列車種別>電車">
+                            <small class="form-help">「&lt;品詞&gt;」で置換可能なパターンを指定してください。</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="pattern-count">生成数:</label>
+                            <input type="number" id="pattern-count" value="5" min="1" max="20">
+                        </div>
+
+                        <button onclick="generatePatterns()" class="btn btn-small btn-primary">パターンを生成</button>
+
+                        <div id="pattern-results" class="pattern-results" style="display: none;">
+                            <h6>生成結果:</h6>
+                            <div id="pattern-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 音声ファイル一括登録 -->
+                <div class="sub-section">
+                    <h4>📁 音声ファイル一括登録</h4>
+                    <p class="small-info">複数の音声ファイルを一度に登録できます。</p>
+
+                    <div class="form-group">
+                        <label for="bulk-audio-files">音声ファイル（複数選択可）:</label>
+                        <input type="file" id="bulk-audio-files" accept=".wav,.mp3" multiple>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="auto-generate-id" checked>
+                            ファイル名からIDを自動生成
+                        </label>
+                    </div>
+
+                    <button onclick="processBulkAudioFiles()" class="btn btn-primary">一括登録を開始</button>
+
+                    <div id="bulk-registration-preview" class="bulk-preview" style="display: none;">
+                        <h4>登録プレビュー</h4>
+                        <div id="bulk-registration-list"></div>
+                        <div class="bulk-actions">
+                            <button onclick="confirmBulkRegistration()" class="btn btn-success">すべて登録</button>
+                            <button onclick="cancelBulkRegistration()" class="btn btn-danger">キャンセル</button>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <!-- 文章パターン管理タブ -->
+        <div id="sentences-tab" class="tab-content">
+            <h2>文章パターン管理</h2>
+
+            <!-- エラー・警告表示エリア -->
+            <div id="sentences-messages" class="messages-area" style="display: none;"></div>
+
+            <div class="section">
+                <h3>新しい文章パターンを作成</h3>
+                <div class="pattern-explanation">
+                    <p class="small-info">
+                        <strong>文章パターンとは：</strong>複数のパーツを順次再生して一つの放送を構成するためのテンプレートです。
+                        例：「まもなく」→「名古屋」→「急行」の順でパーツを再生
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label for="sentence-text">文章説明 <span class="required">*</span>:</label>
+                    <input type="text" id="sentence-text" placeholder="例: 名古屋行急行" required>
+                    <small class="form-help">この文章パターンの説明です。プレイヤーで表示されます。</small>
+                </div>
+                <div class="form-group">
+                    <label>パーツ構成 <span class="required">*</span>:</label>
+                    <div id="sentence-parts" class="sentence-parts">
+                        <div class="parts-selector-enhanced">
+                            <div class="parts-search-container">
+                                <input type="text" id="parts-search-input" placeholder="パーツを検索... (ID・テキストで検索)"
+                                    onkeyup="filterAvailableParts()" onkeydown="handlePartsSearchKeydown(event)">
+                                <div class="search-results-info">
+                                    <span id="search-results-count">0件表示中</span>
+                                </div>
+                            </div>
+
+                            <div class="parts-selection-methods">
+                                <!-- 従来のセレクト方式 -->
+                                <div class="selection-method" id="select-method">
+                                    <select id="available-parts" onchange="handlePartSelection(this.value)">
+                                        <option value="">パーツを選択...</option>
+                                    </select>
+                                </div>
+
+                                <!-- 新しいリスト方式 -->
+                                <div class="selection-method" id="list-method" style="display: none;">
+                                    <div id="parts-list-container" class="parts-list-selection">
+                                        <div class="parts-grid" id="available-parts-grid"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="selector-controls">
+                                <button type="button" onclick="addPartToSentence()" class="btn btn-small"
+                                    id="add-part-btn" disabled>
+                                    <span class="btn-icon">➕</span>追加
+                                </button>
+                                <button type="button" onclick="toggleSelectionMethod()"
+                                    class="btn btn-small btn-secondary" id="toggle-method-btn">
+                                    <span class="btn-icon">🔄</span>リスト表示
+                                </button>
+                                <button type="button" onclick="clearPartsSearch()" class="btn btn-small btn-secondary">
+                                    <span class="btn-icon">🗑️</span>検索クリア
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="selected-parts" class="selected-parts">
+                            <div class="no-parts-selected">まだパーツが選択されていません</div>
+                        </div>
+
+                        <div class="parts-selection-tips">
+                            <h5>💡 パーツ選択のコツ</h5>
+                            <ul>
+                                <li><kbd>↑</kbd><kbd>↓</kbd>: リスト内を移動</li>
+                                <li><kbd>Enter</kbd>: 選択したパーツを追加</li>
+                                <li><kbd>Esc</kbd>: 検索をクリア</li>
+                                <li><strong>検索例:</strong> "名古屋" "nagoya" "station" など</li>
+                            </ul>
+                        </div>
+
+                        <small class="form-help">パーツは選択した順番で再生されます。ドラッグ&ドロップで順序を変更できます。</small>
+                    </div>
+                </div>
+                <button onclick="addSentence()" class="btn btn-primary">文章パターンを追加</button>
+            </div>
+
+            <div class="section">
+                <h3>登録済み文章パターン一覧</h3>
+                <div id="sentences-list" class="sentences-list"></div>
+            </div>
+        </div>
+
+        <!-- 音声作成ツールタブ -->
+        <div id="tools-tab" class="tab-content">
+            <h2>音声作成ツール</h2>
+            <p class="description">音声ファイルの作成・インポートに関する便利なツールです。既存の音声ファイルのインポートやVOICEVOXなどの音声合成ソフトとの連携が可能です。</p>
+
+            <!-- エラー・警告表示エリア -->
+            <div id="tools-messages" class="messages-area" style="display: none;"></div>
+
+            <!-- Zipファイルインポート機能 -->
+            <div class="section">
+                <h3>🗂️ 音声Zipファイルのインポート</h3>
+                <div class="feature-explanation">
+                    <p class="info-text">音声ファイルがまとまったZipファイルから自動的にパーツを作成し、設定ファイルを追加します。</p>
+                    <p class="small-info"><strong>対応形式:</strong> .wav, .mp3 ファイルを含むZipファイル</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="import-zip">音声Zipファイル:</label>
+                    <input type="file" id="import-zip" accept=".zip">
+                </div>
+
+                <div class="import-options">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="auto-generate-ids" checked>
+                            ファイル名からIDを自動生成
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="skip-existing" checked>
+                            既存のパーツはスキップ
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="generate-readings" checked>
+                            読み方を自動生成
+                        </label>
+                    </div>
+                </div>
+
+                <button onclick="importZipFile()" class="btn btn-primary">Zipファイルを解析</button>
+
+                <div id="import-preview" class="import-preview" style="display: none;">
+                    <h4>インポート内容プレビュー</h4>
+                    <div id="import-summary" class="import-summary"></div>
+                    <div id="import-files-list" class="import-files-list"></div>
+                    <div class="import-actions">
+                        <button onclick="confirmImport()" class="btn btn-success">すべてインポート</button>
+                        <button onclick="cancelImport()" class="btn btn-danger">キャンセル</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VOICEVOX連携機能 -->
+            <div class="section">
+                <h3>🎤 VOICEVOX連携 - テキストリスト作成</h3>
+                <p class="info-text">音声合成ソフトVOICEVOXと連携するためのテキストリストを作成します。</p>
+
+                <div class="form-group">
+                    <label for="voicevox-text-input">テキスト（1行に1つずつ）:</label>
+                    <textarea id="voicevox-text-input" placeholder="例:&#10;名古屋&#10;まもなく&#10;普通電車&#10;次は&#10;到着します"
+                        rows="8"></textarea>
+                    <small class="form-help">音声合成したいテキストを1行に1つずつ入力してください。</small>
+                </div>
+
+                <div class="voicevox-actions">
+                    <button onclick="generateVoicevoxTextList()" class="btn btn-primary">
+                        <span class="btn-icon">🎤</span>VOICEVOXリストを生成
+                    </button>
+                    <button onclick="showCommonTerms()" class="btn btn-secondary">
+                        <span class="btn-icon">📝</span>よく使う鉄道用語
+                    </button>
+                    <button onclick="clearVoicevoxInput()" class="btn btn-secondary">
+                        <span class="btn-icon">🗑️</span>クリア
+                    </button>
+                </div>
+
+                <div id="voicevox-output-section" class="voicevox-output" style="display: none;">
+                    <h4>📋 生成されたVOICEVOXリスト</h4>
+                    <textarea id="voicevox-preview" readonly placeholder="VOICEVOXリストがここに表示されます..."></textarea>
+                    <div class="voicevox-stats">
+                        <span id="voicevox-count">0</span>件のテキストが含まれています
+                    </div>
+                    <div class="voicevox-download-actions">
+                        <button onclick="downloadVoicevoxList()" class="btn btn-success">
+                            <span class="btn-icon">💾</span>リストをダウンロード
+                        </button>
+                        <button onclick="copyToClipboard('voicevox-preview')" class="btn btn-secondary">
+                            <span class="btn-icon">📋</span>コピー
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- その他の機能 -->
+            <div class="section">
+                <h3>🔧 その他の機能</h3>
+
+                <!-- 登録済みパーツのCSVエクスポート -->
+                <div class="sub-section">
+                    <h4>📊 登録済みパーツリストのCSVエクスポート</h4>
+                    <p class="small-info">現在登録されているパーツ一覧をCSV形式でエクスポートできます。データの管理や外部ツールでの活用に便利です。</p>
+
+                    <div class="csv-export-info">
+                        <div class="info-item">
+                            <span class="info-label">出力項目:</span>
+                            <span class="info-value">ID, テキスト, 音声ファイル名</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">ファイル形式:</span>
+                            <span class="info-value">CSV (UTF-8 BOM付き)</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">現在のパーツ数:</span>
+                            <span class="info-value" id="current-parts-count">0</span>件
+                        </div>
+                    </div>
+
+                    <div class="csv-export-actions">
+                        <button onclick="exportPartsCSV()" class="btn btn-primary" id="export-csv-btn">
+                            <span class="btn-icon">📊</span>CSVファイルをエクスポート
+                        </button>
+                        <button onclick="previewPartsCSV()" class="btn btn-secondary">
+                            <span class="btn-icon">👁️</span>プレビュー表示
+                        </button>
+                    </div>
+
+                    <div id="csv-preview-section" class="csv-preview" style="display: none;">
+                        <h5>📋 CSVプレビュー</h5>
+                        <textarea id="csv-preview" readonly rows="8"></textarea>
+                    </div>
+                </div>
+
+                <!-- 旧機能（隠す） -->
+                <div class="sub-section voicevox-helper" style="display: none;">
+                    <h4>✍️ 新規テキストからテキストリスト作成</h4>
+                    <p class="small-info">新しいテキストから音声合成用のリストを作成できます。</p>
+
+                    <div class="form-group">
+                        <label for="tools-bulk-text-input">テキスト（1行に1つずつ）:</label>
+                        <textarea id="tools-bulk-text-input" placeholder="例:&#10;名古屋&#10;まもなく&#10;普通"
+                            rows="4"></textarea>
+                    </div>
+
+                    <div class="simple-actions">
+                        <button onclick="generateBulkVoicevoxList()" class="btn btn-small">リスト生成</button>
+                        <button onclick="showCommonTerms()" class="btn btn-small">鉄道用語</button>
+                    </div>
+
+                    <div id="tools-bulk-voicevox-output" class="bulk-output" style="display: none;">
+                        <textarea id="tools-bulk-voicevox-preview" readonly rows="6"></textarea>
+                        <div class="simple-actions">
+                            <button onclick="downloadBulkVoicevoxList()" class="btn btn-small">ダウンロード</button>
+                            <button onclick="copyToClipboard('tools-bulk-voicevox-preview')"
+                                class="btn btn-small">コピー</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 使用方法ガイド -->
+                <div class="sub-section">
+                    <h4>📖 使用方法ガイド</h4>
+                    <div class="usage-tabs">
+                        <button class="usage-tab-btn active" onclick="showUsageTab('zip-import')">Zipインポート</button>
+                        <button class="usage-tab-btn" onclick="showUsageTab('voicevox')">VOICEVOX連携</button>
+                    </div>
+
+                    <div id="zip-import-usage" class="usage-content active">
+                        <h5>🗂️ Zipファイルインポートの使い方</h5>
+                        <ol>
+                            <li>音声ファイル（.wav、.mp3）をZipにまとめる</li>
+                            <li>「音声Zipファイル」で作成したZipを選択</li>
+                            <li>オプションを設定して「Zipファイルを解析」をクリック</li>
+                            <li>プレビューで内容を確認後、「すべてインポート」で登録</li>
+                        </ol>
+                    </div>
+
+                    <div id="voicevox-usage" class="usage-content">
+                        <h5>🎤 VOICEVOX連携の使い方</h5>
+                        <ol>
+                            <li>VOICEVOXで音声合成したいテキストを入力エリアに記入</li>
+                            <li>「VOICEVOXリストを生成」でテキストリストを作成</li>
+                            <li>「リストをダウンロード」でテキストファイルを保存</li>
+                            <li>VOICEVOXでダウンロードしたリストから音声ファイルを生成</li>
+                            <li>生成したファイルをZipにまとめて上記のインポート機能を使用</li>
+                        </ol>
+                        <div class="usage-tip">
+                            <strong>💡 ヒント:</strong> よく使う鉄道用語ボタンで定型文を素早く入力できます。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 設定ファイル出力タブ -->
+        <div id="export-tab" class="tab-content">
+            <h2>設定ファイル出力</h2>
+
+            <!-- 統計情報 -->
+            <div class="section">
+                <h3>現在の構成</h3>
+                <div class="config-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">登録パーツ数:</span>
+                        <span class="stat-value" id="parts-count">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">文章パターン数:</span>
+                        <span class="stat-value" id="sentences-count">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">音声ファイル数:</span>
+                        <span class="stat-value" id="audio-files-count">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>config.json プレビュー</h3>
+                <p class="small-info">以下が生成される設定ファイルの内容です。車内自動放送プレイヤーはこの設定に基づいてUIを構成し、音声を再生します。</p>
+                <div class="config-preview-container">
+                    <textarea id="config-preview" readonly
+                        placeholder="パーツや文章パターンを追加すると設定ファイルのプレビューが表示されます..."></textarea>
+                    <div class="preview-actions">
+                        <button onclick="validateConfig()" class="btn btn-small">設定を検証</button>
+                        <button onclick="copyToClipboard('config-preview')" class="btn btn-small">コピー</button>
+                    </div>
+                </div>
+                <div id="config-validation" class="validation-result" style="display: none;"></div>
+            </div>
+
+            <div class="section">
+                <h3>ファイル出力</h3>
+                <div class="export-buttons">
+                    <button onclick="downloadConfig()" class="btn btn-primary" id="download-config-btn"
+                        disabled>config.jsonをダウンロード</button>
+                    <button onclick="downloadZip()" class="btn btn-success" id="download-zip-btn"
+                        disabled>完成したZipファイルをダウンロード</button>
+                </div>
+                <div class="export-info">
+                    <p class="small-info"><strong>注意:</strong> Zipファイルには設定ファイル（config.json）と登録した音声ファイルがすべて含まれます。</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>使用方法</h3>
+                <div class="workflow-steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>音声パーツ管理</h4>
+                            <p>音声ファイルとテキストを登録してパーツを作成します</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>文章パターン管理</h4>
+                            <p>パーツを組み合わせて放送パターンを作成します</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4>設定ファイル出力</h4>
+                            <p>設定ファイルとZipファイルをダウンロードします</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4>プレイヤーにアップロード</h4>
+                            <p>ダウンロードしたZipファイルを<a href="https://site.neko09cat.com/Train-Speak/" target="_blank"
+                                    rel="noopener">車内自動放送プレイヤー</a>にアップロードして使用します</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 辞書モーダル -->
+    <div id="dictionary-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🤖 日本語辞書 - AI ID生成機能</h3>
+                <button class="modal-close" onclick="closeDictionary()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="dictionary-info">
+                    <p><strong>この機能について：</strong></p>
+                    <p>高度な形態素解析エンジン（Kuromoji）を使用し、日本語テキストを詳細に分析してIDを自動生成します。鉄道専用の辞書と組み合わせて、より適切なIDを提案します。</p>
+                    <p><small>★印は鉄道専門用語として認識された単語です。</small></p>
+                </div>
+
+                <div class="dictionary-search">
+                    <input type="text" id="dict-search" placeholder="辞書を検索..." onkeyup="filterDictionary()">
+                </div>
+
+                <div class="dictionary-categories">
+                    <div class="dict-category">
+                        <h4>📍 駅名・地名</h4>
+                        <div class="dict-items" id="dict-places"></div>
+                    </div>
+                    <div class="dict-category">
+                        <h4>🚄 列車種別</h4>
+                        <div class="dict-items" id="dict-train-types"></div>
+                    </div>
+                    <div class="dict-category">
+                        <h4>⏰ 時間・動作</h4>
+                        <div class="dict-items" id="dict-actions"></div>
+                    </div>
+                    <div class="dict-category">
+                        <h4>🧭 方向・場所</h4>
+                        <div class="dict-items" id="dict-directions"></div>
+                    </div>
+                    <div class="dict-category">
+                        <h4>🚃 編成・車両</h4>
+                        <div class="dict-items" id="dict-cars"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- カスタム辞書管理モーダル -->
+    <div id="custom-dict-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📖 カスタム辞書管理</h3>
+                <button class="modal-close" onclick="closeCustomDictManager()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="dict-manager-info">
+                    <p><strong>カスタム辞書:</strong> あなたが追加した単語の管理</p>
+                    <div class="dict-stats">
+                        <span>デフォルト辞書: <span id="default-dict-count">0</span>語</span>
+                        <span>カスタム辞書: <span id="custom-dict-count">0</span>語</span>
+                        <span>合計: <span id="total-dict-count">0</span>語</span>
+                    </div>
+                </div>
+
+                <div class="dict-manager-controls">
+                    <input type="text" id="dict-manager-search" placeholder="辞書を検索..." onkeyup="filterCustomDict()">
+                    <select id="dict-manager-filter" onchange="filterCustomDict()">
+                        <option value="">すべての品詞</option>
+                        <option value="地名">地名</option>
+                        <option value="列車種別">列車種別</option>
+                        <option value="副詞">副詞</option>
+                        <option value="名詞">名詞</option>
+                        <option value="動詞">動詞</option>
+                        <option value="連体詞">連体詞</option>
+                        <option value="接尾辞">接尾辞</option>
+                        <option value="助詞">助詞</option>
+                        <option value="語尾">語尾</option>
+                        <option value="数詞">数詞</option>
+                    </select>
+                </div>
+
+                <div class="dict-manager-list">
+                    <div class="dict-manager-header">
+                        <span>単語</span>
+                        <span>読み</span>
+                        <span>ローマ字</span>
+                        <span>品詞</span>
+                        <span>ID</span>
+                        <span>操作</span>
+                    </div>
+                    <div id="custom-dict-items" class="dict-manager-items"></div>
+                </div>
+
+                <div class="dict-manager-actions">
+                    <button onclick="clearCustomDict()" class="btn btn-danger">カスタム辞書をクリア</button>
+                    <button onclick="resetToDefaults()" class="btn btn-warning">デフォルトに戻す</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- パーツ編集モーダル -->
+    <div id="edit-part-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ パーツを編集</h3>
+                <button class="modal-close" onclick="closeEditPartModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- エラー・警告表示エリア -->
+                <div id="edit-part-messages" class="messages-area" style="display: none;"></div>
+
+                <form id="edit-part-form" onsubmit="return false;" class="edit-part-form">
+                    <div class="form-group">
+                        <label for="edit-part-id">ID <span class="required">*</span>:</label>
+                        <div class="input-with-buttons">
+                            <input type="text" id="edit-part-id" required onkeyup="updateEditPreview()">
+                            <button type="button" onclick="generateEditIdFromText()" class="btn btn-small">🤖
+                                AI生成</button>
+                        </div>
+                        <small class="form-help">英数字とアンダースコアのみ使用可能です。</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-part-text">表示テキスト <span class="required">*</span>:</label>
+                        <input type="text" id="edit-part-text" required onkeyup="updateEditPreview()">
+                        <small class="form-help">プレイヤーで表示されるテキストです。</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-part-audio">音声ファイル:</label>
+                        <div class="current-audio-info">
+                            <span>現在の音声: </span>
+                            <span id="current-audio-name" class="current-file-name"></span>
+                        </div>
+                        <div class="file-input-wrapper" id="edit-file-drop-zone">
+                            <input type="file" id="edit-part-audio" accept=".wav,.mp3"
+                                onchange="handleEditFileSelect(event)">
+                            <div class="file-drop-hint">
+                                <span class="drop-text">新しい音声ファイルをドロップするか、クリックして選択</span>
+                                <span class="file-info" id="edit-file-info" style="display: none;"></span>
+                            </div>
+                        </div>
+                        <small class="form-help">変更しない場合は選択しないでください。対応形式: .wav, .mp3</small>
+                    </div>
+
+                    <!-- プレビュー表示 -->
+                    <div id="edit-part-preview" class="part-preview">
+                        <h4>📋 編集内容プレビュー</h4>
+                        <div class="preview-content">
+                            <div class="preview-item">
+                                <span class="preview-label">ID:</span>
+                                <span id="edit-preview-id"></span>
+                            </div>
+                            <div class="preview-item">
+                                <span class="preview-label">テキスト:</span>
+                                <span id="edit-preview-text"></span>
+                            </div>
+                            <div class="preview-item">
+                                <span class="preview-label">音声ファイル:</span>
+                                <span id="edit-preview-audio"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" onclick="savePartEdits()" class="btn btn-primary" id="save-part-btn">
+                            <span class="btn-icon">💾</span>変更を保存
+                        </button>
+                        <button type="button" onclick="closeEditPartModal()" class="btn btn-secondary">
+                            <span class="btn-icon">❌</span>キャンセル
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 外部ライブラリ - 非同期読み込みで最適化 -->
+    <script>
+        // ライブラリの非同期読み込み管理
+        const LibraryLoader = {
+            loaded: new Set(),
+            loading: new Set(),
+
+            async loadScript(src, name) {
+                if (this.loaded.has(name)) {
+                    return Promise.resolve();
+                }
+
+                if (this.loading.has(name)) {
+                    return new Promise(resolve => {
+                        const checkLoaded = () => {
+                            if (this.loaded.has(name)) {
+                                resolve();
+                            } else {
+                                setTimeout(checkLoaded, 50);
+                            }
+                        };
+                        checkLoaded();
+                    });
+                }
+
+                this.loading.add(name);
+
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.async = true;
+                    script.crossorigin = 'anonymous';
+
+                    script.onload = () => {
+                        this.loaded.add(name);
+                        this.loading.delete(name);
+                        console.log(`📚 ${name} ライブラリが読み込まれました`);
+                        resolve();
+                    };
+
+                    script.onerror = () => {
+                        this.loading.delete(name);
+                        console.error(`❌ ${name} ライブラリの読み込みに失敗しました`);
+                        reject(new Error(`Failed to load ${name}`));
+                    };
+
+                    document.head.appendChild(script);
+                });
+            }
+        };
+
+        // ライブラリの順次読み込み（改良版）
+        async function loadLibraries() {
+            try {
+                console.log('📚 外部ライブラリの読み込みを開始...');
+
+                // JSZip ライブラリを先に読み込み（必須）
+                await LibraryLoader.loadScript(
+                    'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+                    'JSZip'
+                );
+
+                // Kuromoji ライブラリを読み込み（形態素解析用、エラーでも継続）
+                try {
+                    await LibraryLoader.loadScript(
+                        'https://unpkg.com/kuromoji@0.1.2/build/kuromoji.js',
+                        'Kuromoji'
+                    );
+                    console.log('✅ すべてのライブラリが正常に読み込まれました');
+                } catch (kuromojiError) {
+                    console.warn('⚠️ Kuromoji読み込み失敗（フォールバック機能を使用）:', kuromojiError);
+                    // Kuromojiが読み込めなくても、アプリケーションは動作する
+                }
+
+                // ライブラリ読み込み完了を全体に通知
+                window.dispatchEvent(new CustomEvent('librariesLoaded', {
+                    detail: {
+                        jszip: LibraryLoader.loaded.has('JSZip'),
+                        kuromoji: LibraryLoader.loaded.has('Kuromoji')
+                    }
+                }));
+
+                console.log('🚀 ライブラリ読み込み処理完了');
+            } catch (error) {
+                console.error('❌ 必須ライブラリ読み込みエラー:', error);
+                // JSZipが読み込めない場合は重大なエラー
+                window.dispatchEvent(new CustomEvent('libraryLoadError', {
+                    detail: { error }
+                }));
+            }
+        }
+
+        // ライブラリ読み込みを開始
+        loadLibraries();
+    </script>
+
+    <!-- メインアプリケーション -->
+    <script src="script.js" defer></script>
+
+    <!-- サービスワーカー（将来的なオフライン対応） -->
+    <script>
+        if ('serviceWorker' in navigator && location.protocol === 'https:') {
+            navigator.serviceWorker.register('/sw.js').catch(console.warn);
+        }
+    </script>
+</body>
+
+</html>
