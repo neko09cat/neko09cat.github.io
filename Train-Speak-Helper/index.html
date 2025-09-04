@@ -15,23 +15,14 @@
     <meta property="og:type" content="website">
     <meta property="og:locale" content="ja_JP">
 
-    <!-- パフォーマンス最適化 -->
+    <!-- 最適化 -->
     <meta name="theme-color" content="#3498db">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 
     <title>車内自動放送プレイヤー構成ヘルパー</title>
 
-    <!-- Critical CSS Inline (将来的に検討) -->
-    <link rel="stylesheet" href="./styles.css">
-
-    <!-- JavaScript の非同期読み込み -->
-    <script>
-        // 早期エラーキャッチャー
-        window.addEventListener('error', function (e) {
-            console.error('Early error:', e.error);
-        });
-    </script>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
@@ -885,18 +876,36 @@
             }
         };
 
-        // ライブラリの順次読み込み（改良版）
+        // ライブラリの順次読み込み（GitHub Pages対応版）
         async function loadLibraries() {
             try {
                 console.log('📚 外部ライブラリの読み込みを開始...');
 
-                // JSZip ライブラリを先に読み込み（必須）
-                await LibraryLoader.loadScript(
-                    'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-                    'JSZip'
-                );
+                // GitHub Pagesの環境検出
+                const isGitHubPages = window.location.hostname.includes('github.io');
+                if (isGitHubPages) {
+                    console.log('🏠 GitHub Pages環境を検出しました');
+                }
 
-                // Kuromoji ライブラリを読み込み（形態素解析用、エラーでも継続）
+                // JSZip ライブラリを先に読み込み（必須）- 複数CDNでフォールバック
+                try {
+                    await LibraryLoader.loadScript(
+                        'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+                        'JSZip'
+                    );
+                } catch (jszipError) {
+                    console.warn('⚠️ JSZip主要CDNで失敗、代替CDNを試行中...');
+                    try {
+                        await LibraryLoader.loadScript(
+                            'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js',
+                            'JSZip'
+                        );
+                    } catch (jszipError2) {
+                        throw new Error('JSZipライブラリの読み込みに完全に失敗しました');
+                    }
+                }
+
+                // Kuromoji ライブラリを読み込み（形態素解析用、エラーでも継続）- 複数CDNでフォールバック
                 try {
                     await LibraryLoader.loadScript(
                         'https://unpkg.com/kuromoji@0.1.2/build/kuromoji.js',
@@ -904,8 +913,17 @@
                     );
                     console.log('✅ すべてのライブラリが正常に読み込まれました');
                 } catch (kuromojiError) {
-                    console.warn('⚠️ Kuromoji読み込み失敗（フォールバック機能を使用）:', kuromojiError);
-                    // Kuromojiが読み込めなくても、アプリケーションは動作する
+                    console.warn('⚠️ Kuromoji主要CDNで失敗、代替CDNを試行中...');
+                    try {
+                        await LibraryLoader.loadScript(
+                            'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js',
+                            'Kuromoji'
+                        );
+                        console.log('✅ Kuromoji代替CDNから読み込み成功');
+                    } catch (kuromojiError2) {
+                        console.warn('⚠️ Kuromoji読み込み失敗（フォールバック機能を使用）:', kuromojiError2);
+                        // Kuromojiが読み込めなくても、アプリケーションは動作する
+                    }
                 }
 
                 // ライブラリ読み込み完了を全体に通知
@@ -931,12 +949,12 @@
     </script>
 
     <!-- メインアプリケーション -->
-    <script src="./script.js" defer></script>
+    <script src="script.js" defer></script>
 
-    <!-- サービスワーカー（将来的なオフライン対応） -->
+    <!-- サービスワーカー -->
     <script>
         if ('serviceWorker' in navigator && location.protocol === 'https:') {
-            navigator.serviceWorker.register('/sw.js').catch(console.warn);
+            navigator.serviceWorker.register('sw.js');
         }
     </script>
 </body>

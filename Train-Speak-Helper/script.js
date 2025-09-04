@@ -150,15 +150,38 @@ async function initializeMorphologyAnalyzer() {
         // Kuromojiライブラリが読み込まれるまで待機
         await waitForKuromoji();
 
-        morphologyTokenizer = await new Promise((resolve, reject) => {
-            kuromoji.builder({ dicPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' }).build((err, tokenizer) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(tokenizer);
-                }
-            });
-        });
+        // 辞書パスの設定（GitHub Pages対応）
+        const dictPaths = [
+            'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict',
+            'https://unpkg.com/kuromoji@0.1.2/dict'
+        ];
+
+        let tokenizer = null;
+        for (const dictPath of dictPaths) {
+            try {
+                console.log(`🤖 形態素解析辞書を読み込み中: ${dictPath}`);
+                tokenizer = await new Promise((resolve, reject) => {
+                    kuromoji.builder({ dicPath }).build((err, result) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve(result);
+                        }
+                    });
+                });
+                console.log(`✅ 辞書読み込み成功: ${dictPath}`);
+                break;
+            } catch (dictError) {
+                console.warn(`⚠️ 辞書読み込み失敗: ${dictPath}`, dictError);
+                continue;
+            }
+        }
+
+        if (!tokenizer) {
+            throw new Error('すべての辞書パスで読み込みに失敗しました');
+        }
+
+        morphologyTokenizer = tokenizer;
         console.log('形態素解析器の初期化が完了しました');
     } catch (error) {
         console.error('形態素解析器の初期化に失敗しました:', error);
