@@ -59,10 +59,27 @@ const AppState = {
     // UI状態管理
     ui: {
         selectedPartInGrid: null,
-        isListMode: false,
         draggedPart: null,
         editingPartIndex: -1,
-        debugMode: false
+        debugMode: false,
+        autoAddMode: false, // ワンクリック追加モード
+        mouseOperationMode: true, // マウス操作優先モード
+        theme: 'light' // テーマ設定（light/dark）
+    },
+
+    // デバイス設定管理
+    device: {
+        colorScheme: 'light', // システムのカラースキーム
+        reducedMotion: false, // アニメーション減少設定
+        highContrast: false, // ハイコントラスト設定
+        forcedColors: false, // 強制色設定
+        touchDevice: false, // タッチデバイス
+        screenSize: 'desktop', // desktop/tablet/mobile
+        pixelRatio: 1, // デバイスピクセル比
+        connection: 'unknown', // ネットワーク接続
+        language: 'ja', // 言語設定
+        timezone: 'Asia/Tokyo', // タイムゾーン
+        autoApply: true // 自動適用設定
     },
 
     // データアクセサ（後方互換性のため）
@@ -161,7 +178,7 @@ async function initializeMorphologyAnalyzer() {
             try {
                 console.log(`🤖 形態素解析辞書を読み込み中: ${dictPath}`);
                 tokenizer = await new Promise((resolve, reject) => {
-                    kuromoji.builder({ dicPath }).build((err, result) => {
+                    kuromoji.builder({ dicPath: dictPath }).build((err, result) => {
                         if (err) {
                             reject(err);
                         } else {
@@ -546,7 +563,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             const notification = document.createElement('div');
             notification.style.cssText = `
                 position: fixed; top: 20px; right: 20px; 
-                background: #27ae60; color: white; 
+                background: var(--success-color); color: var(--text-inverse); 
                 padding: 10px 15px; border-radius: 5px; 
                 font-size: 14px; z-index: 10000;
                 animation: fadeIn 0.3s ease;
@@ -567,6 +584,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     console.log('✅ 基本初期化完了');
 
+    // マウス操作のためのUI初期化
+    initializeMouseOperationUI();
+
     // ライブラリ読み込みエラーの監視
     window.addEventListener('libraryLoadError', (event) => {
         console.error('📚 ライブラリ読み込みエラー:', event.detail.error);
@@ -575,11 +595,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         const errorNotification = document.createElement('div');
         errorNotification.style.cssText = `
             position: fixed; top: 20px; right: 20px; 
-            background: #e74c3c; color: white; 
+            background: var(--danger-color); color: var(--text-inverse); 
             padding: 15px 20px; border-radius: 5px; 
             font-size: 14px; z-index: 10000;
             max-width: 300px; line-height: 1.4;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            box-shadow: var(--shadow-lg);
         `;
         errorNotification.innerHTML = `
             <div style="font-weight: bold; margin-bottom: 5px;">⚠️ ライブラリ読み込みエラー</div>
@@ -602,6 +622,15 @@ function initializeOptimizedEventListeners() {
     if (searchInput) {
         searchInput.addEventListener('input', debouncedFilterParts);
         searchInput.addEventListener('keydown', handlePartsSearchKeydown);
+
+        // フォーカス時にオートコンプリートを表示
+        searchInput.addEventListener('focus', () => {
+            if (searchInput.value.trim()) {
+                updateAutocomplete(searchInput.value.toLowerCase());
+            }
+        });
+
+        console.log('パーツ検索イベントリスナーを設定しました（オートコンプリート対応）');
     }
 
     // テキスト入力のID生成デバウンス
@@ -644,6 +673,33 @@ function initializeOptimizedEventListeners() {
         }
     }, 250);
     window.addEventListener('resize', throttledResize);
+
+    // オートコンプリートの外部クリック処理
+    document.addEventListener('click', (event) => {
+        const searchContainer = document.querySelector('.parts-search-container');
+        if (searchContainer && !searchContainer.contains(event.target)) {
+            hideAutocomplete();
+        }
+    });
+}// マウス操作のためのUI初期化
+function initializeMouseOperationUI() {
+    // ワンクリック追加ボタンの初期設定
+    const autoAddBtn = document.getElementById('auto-add-btn');
+    if (autoAddBtn) {
+        autoAddBtn.title = 'ワンクリック追加モードに切り替え（クリックで即座に追加）';
+        console.log('マウス操作UI初期化完了');
+    }
+
+    // 検索入力欄にクリアボタンの機能を確実に設定
+    const searchClearBtn = document.querySelector('.search-clear-btn');
+    if (searchClearBtn) {
+        searchClearBtn.addEventListener('click', clearPartsSearch);
+    }
+
+    // パーツリストが存在する場合の初期設定
+    updateAvailableParts();
+
+    console.log('マウス操作UIの初期化が完了しました');
 }// タブ切り替え
 function showTab(tabName) {
     // すべてのタブを非表示
@@ -900,7 +956,7 @@ function performPartsDisplay(container) {
     const partsCount = AppState.data.parts.length;
 
     if (partsCount === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">パーツが登録されていません。</p>';
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">パーツが登録されていません。</p>';
         return;
     }
 
@@ -1224,51 +1280,74 @@ function filterParts() {
     });
 }
 
-// 利用可能パーツ更新
+// 利用可能パーツ更新（リストモードのみ）
 function updateAvailableParts() {
-    const select = document.getElementById('available-parts');
     const grid = document.getElementById('available-parts-grid');
 
-    // セレクトボックス更新
-    select.innerHTML = '<option value="">パーツを選択...</option>';
-
     // グリッド更新
-    grid.innerHTML = '';
+    if (grid) {
+        grid.innerHTML = '';
+    }
 
     partsData.forEach((part, index) => {
-        // セレクトボックス用オプション
-        const option = document.createElement('option');
-        option.value = part.id;
-        option.textContent = `${part.id} (${part.text})`;
-        select.appendChild(option);
-
         // グリッド用オプション
-        const partOption = document.createElement('div');
-        partOption.className = 'part-option';
-        partOption.dataset.partId = part.id;
-        partOption.onclick = () => selectPartInGrid(part.id);
-        partOption.innerHTML = `
-            <div class="part-option-info">
-                <div class="part-option-id">${part.id}</div>
-                <div class="part-option-text">${part.text}</div>
-                <div class="part-option-audio">${part.audio}</div>
-            </div>
-        `;
-        grid.appendChild(partOption);
+        if (grid) {
+            const partOption = document.createElement('div');
+            partOption.className = 'part-option';
+            partOption.dataset.partId = part.id;
+
+            // マウス操作用のイベントハンドラー
+            partOption.addEventListener('click', (event) => handlePartClick(part.id, event));
+            partOption.addEventListener('dblclick', (event) => handlePartDoubleClick(part.id, event));
+            partOption.addEventListener('contextmenu', (event) => handlePartRightClick(part.id, event));
+
+            // ツールチップを設定
+            const tooltipText = AppState.ui.autoAddMode ?
+                'クリックで即座に追加' :
+                'クリックで選択、ダブルクリックで追加';
+            partOption.title = tooltipText;
+
+            // ワンクリック追加モードの場合はクラスを追加
+            if (AppState.ui.autoAddMode) {
+                partOption.classList.add('auto-add-mode');
+            }
+
+            partOption.innerHTML = `
+                <div class="part-option-info">
+                    <div class="part-option-id">${part.id}</div>
+                    <div class="part-option-text">${part.text}</div>
+                    <div class="part-option-audio">${part.audio}</div>
+                </div>
+            `;
+            grid.appendChild(partOption);
+        }
     });
 
     // 検索結果カウント更新
     updateSearchResultsCount();
+
+    // 追加ボタンの状態をリセット
+    const addButton = document.getElementById('add-part-btn');
+    if (addButton) {
+        addButton.disabled = true;
+        console.log('利用可能パーツ更新: 追加ボタンを無効化');
+    }
 }
 
 // パーツ検索機能（最適化版）
 let selectedPartInGrid = null;
+let autocompleteIndex = -1;
+let autocompleteItems = [];
+let isAutocompleteVisible = false;
 
 // デバウンス処理で検索性能を向上
 const debouncedFilterParts = PerformanceUtils.debounce(filterAvailableParts, 150);
 
 function filterAvailableParts() {
     const searchTerm = document.getElementById('parts-search-input')?.value.toLowerCase() || '';
+
+    // オートコンプリートを更新
+    updateAutocomplete(searchTerm);
 
     // 性能測定（デバッグモード時）
     if (AppState.ui.debugMode) {
@@ -1280,7 +1359,6 @@ function filterAvailableParts() {
 
 function performFilter(searchTerm) {
     const partOptions = document.querySelectorAll('.part-option');
-    const selectOptions = document.querySelectorAll('#available-parts option:not(:first-child)');
     let visibleCount = 0;
     const visibleElements = [];
 
@@ -1304,13 +1382,6 @@ function performFilter(searchTerm) {
             } else {
                 option.classList.add('hidden');
             }
-        });
-
-        // セレクトボックスもフィルタリング
-        selectOptions.forEach(option => {
-            const text = option.textContent.toLowerCase();
-            const matches = !searchTerm || text.includes(searchTerm);
-            option.style.display = matches ? 'block' : 'none';
         });
 
         updateSearchResultsCount(visibleCount);
@@ -1348,28 +1419,23 @@ function selectPartInGrid(partId) {
     if (option) {
         option.classList.add('selected');
         selectedPartInGrid = partId;
-
-        // セレクトボックスも同期
-        document.getElementById('available-parts').value = partId;
+        AppState.ui.selectedPartInGrid = partId; // AppStateとの同期
 
         // 追加ボタンを有効化
-        document.getElementById('add-part-btn').disabled = false;
-    }
-}
-
-function handlePartSelection(partId) {
-    if (partId) {
-        selectPartInGrid(partId);
-    } else {
-        selectedPartInGrid = null;
-        document.querySelectorAll('.part-option.selected').forEach(option => {
-            option.classList.remove('selected');
-        });
-        document.getElementById('add-part-btn').disabled = true;
+        const addButton = document.getElementById('add-part-btn');
+        if (addButton) {
+            addButton.disabled = false;
+            console.log('追加ボタンを有効化しました:', partId);
+        }
     }
 }
 
 function handlePartsSearchKeydown(event) {
+    if (isAutocompleteVisible) {
+        handleAutocompleteKeydown(event);
+        return;
+    }
+
     const visibleOptions = document.querySelectorAll('.part-option:not(.hidden)');
     let currentIndex = -1;
 
@@ -1398,6 +1464,7 @@ function handlePartsSearchKeydown(event) {
         event.preventDefault();
         if (selectedPartInGrid) {
             addPartToSentence();
+            clearPartsSearch(); // 追加後に検索をクリア
         }
     } else if (event.key === 'Escape') {
         event.preventDefault();
@@ -1406,35 +1473,314 @@ function handlePartsSearchKeydown(event) {
 }
 
 function clearPartsSearch() {
-    document.getElementById('parts-search-input').value = '';
+    const searchInput = document.getElementById('parts-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    hideAutocomplete();
     filterAvailableParts();
     selectedPartInGrid = null;
+    AppState.ui.selectedPartInGrid = null; // AppStateとの同期
+
     document.querySelectorAll('.part-option.selected').forEach(option => {
         option.classList.remove('selected');
     });
-    document.getElementById('available-parts').value = '';
-    document.getElementById('add-part-btn').disabled = true;
+
+    const addButton = document.getElementById('add-part-btn');
+    if (addButton) {
+        addButton.disabled = true;
+        console.log('検索クリア: 追加ボタンを無効化しました');
+    }
+}// ワンクリック追加モードの切り替え
+function toggleAutoAdd() {
+    AppState.ui.autoAddMode = !AppState.ui.autoAddMode;
 }
 
-// 表示方法切り替え
-let isListMode = false;
+// オートコンプリート機能
+function updateAutocomplete(searchTerm) {
+    const dropdown = document.getElementById('autocomplete-dropdown');
+    if (!dropdown) return;
 
-function toggleSelectionMethod() {
-    const selectMethod = document.getElementById('select-method');
-    const listMethod = document.getElementById('list-method');
-    const toggleBtn = document.getElementById('toggle-method-btn');
-
-    isListMode = !isListMode;
-
-    if (isListMode) {
-        selectMethod.style.display = 'none';
-        listMethod.style.display = 'block';
-        toggleBtn.innerHTML = '<span class="btn-icon">🔄</span>セレクト表示';
-    } else {
-        selectMethod.style.display = 'block';
-        listMethod.style.display = 'none';
-        toggleBtn.innerHTML = '<span class="btn-icon">🔄</span>リスト表示';
+    // 検索語が空の場合は非表示
+    if (!searchTerm.trim()) {
+        hideAutocomplete();
+        return;
     }
+
+    // マッチするパーツを検索
+    autocompleteItems = partsData.filter(part => {
+        const id = part.id.toLowerCase();
+        const text = part.text.toLowerCase();
+        return id.includes(searchTerm) || text.includes(searchTerm);
+    }).slice(0, 10); // 最大10件
+
+    if (autocompleteItems.length === 0) {
+        hideAutocomplete();
+        return;
+    }
+
+    // ドロップダウンの内容を生成
+    dropdown.innerHTML = autocompleteItems.map((part, index) => `
+        <div class="autocomplete-item" data-index="${index}" data-part-id="${part.id}">
+            <span class="autocomplete-item-id">${part.id}</span>
+            <span class="autocomplete-item-text">${part.text}</span>
+            <span class="autocomplete-item-hint">Enter で追加</span>
+        </div>
+    `).join('');
+
+    // イベントリスナーを設定
+    dropdown.querySelectorAll('.autocomplete-item').forEach((item, index) => {
+        item.addEventListener('click', () => selectAutocompleteItem(index));
+        item.addEventListener('mouseenter', () => setAutocompleteIndex(index));
+    });
+
+    // 最初の項目を選択
+    autocompleteIndex = 0;
+    updateAutocompleteSelection();
+    showAutocomplete();
+}
+
+function handleAutocompleteKeydown(event) {
+    if (!isAutocompleteVisible || autocompleteItems.length === 0) return;
+
+    switch (event.key) {
+        case 'ArrowDown':
+            event.preventDefault();
+            autocompleteIndex = (autocompleteIndex + 1) % autocompleteItems.length;
+            updateAutocompleteSelection();
+            break;
+        case 'ArrowUp':
+            event.preventDefault();
+            autocompleteIndex = autocompleteIndex <= 0
+                ? autocompleteItems.length - 1
+                : autocompleteIndex - 1;
+            updateAutocompleteSelection();
+            break;
+        case 'Enter':
+            event.preventDefault();
+            if (autocompleteIndex >= 0 && autocompleteIndex < autocompleteItems.length) {
+                selectAutocompleteItem(autocompleteIndex);
+            }
+            break;
+        case 'Escape':
+            event.preventDefault();
+            hideAutocomplete();
+            break;
+    }
+}
+
+function selectAutocompleteItem(index) {
+    if (index < 0 || index >= autocompleteItems.length) return;
+
+    const selectedPart = autocompleteItems[index];
+
+    // パーツを選択
+    selectPartInGrid(selectedPart.id);
+
+    // 文章に追加
+    addPartToSentence();
+
+    // 検索をクリア
+    clearPartsSearch();
+
+    showMessage('sentences-messages', 'success',
+        `パーツ「${selectedPart.id}: ${selectedPart.text}」を追加しました`);
+}
+
+function setAutocompleteIndex(index) {
+    autocompleteIndex = index;
+    updateAutocompleteSelection();
+}
+
+function updateAutocompleteSelection() {
+    const dropdown = document.getElementById('autocomplete-dropdown');
+    if (!dropdown) return;
+
+    dropdown.querySelectorAll('.autocomplete-item').forEach((item, index) => {
+        if (index === autocompleteIndex) {
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+function showAutocomplete() {
+    const dropdown = document.getElementById('autocomplete-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'block';
+        isAutocompleteVisible = true;
+    }
+}
+
+function hideAutocomplete() {
+    const dropdown = document.getElementById('autocomplete-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+        isAutocompleteVisible = false;
+        autocompleteIndex = -1;
+        autocompleteItems = [];
+    }
+}
+
+function toggleAutoAdd() {
+    AppState.ui.autoAddMode = !AppState.ui.autoAddMode;
+    const toggleBtn = document.getElementById('auto-add-btn');
+    const partOptions = document.querySelectorAll('.part-option');
+
+    if (AppState.ui.autoAddMode) {
+        toggleBtn.innerHTML = '<span class="btn-icon">⚡</span>通常モード';
+        toggleBtn.classList.remove('btn-info');
+        toggleBtn.classList.add('btn-success');
+        toggleBtn.title = '現在: ワンクリック追加モード（クリックで即座に追加）';
+
+        // パーツオプションにクラスを追加
+        partOptions.forEach(option => {
+            option.classList.add('auto-add-mode');
+            option.title = 'クリックで即座に追加';
+        });
+
+        showMessage('sentences-messages', 'info', '⚡ ワンクリック追加モードが有効になりました。パーツをクリックすると即座に追加されます。');
+    } else {
+        toggleBtn.innerHTML = '<span class="btn-icon">⚡</span>ワンクリック追加';
+        toggleBtn.classList.remove('btn-success');
+        toggleBtn.classList.add('btn-info');
+        toggleBtn.title = 'ワンクリック追加モードに切り替え（クリックで即座に追加）';
+
+        // パーツオプションからクラスを削除
+        partOptions.forEach(option => {
+            option.classList.remove('auto-add-mode');
+            option.title = 'クリックで選択、ダブルクリックで追加';
+        });
+
+        showMessage('sentences-messages', 'info', '🔄 通常モードに戻りました。パーツを選択してから追加ボタンを押してください。');
+    }
+
+    hideMessagesAfterDelay('sentences-messages', 2000);
+}
+
+// マウス操作用のパーツクリックハンドラー
+function handlePartClick(partId, event) {
+    event.preventDefault();
+
+    if (AppState.ui.autoAddMode) {
+        // ワンクリック追加モードの場合は即座に追加
+        selectPartInGrid(partId);
+        setTimeout(() => {
+            addPartToSentence();
+        }, 50); // 少し遅延させて選択状態を確実にする
+    } else {
+        // 通常モードの場合は選択のみ
+        selectPartInGrid(partId);
+    }
+}
+
+// ダブルクリックハンドラー
+function handlePartDoubleClick(partId, event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!AppState.ui.autoAddMode) {
+        // 通常モードでダブルクリックの場合は直接追加
+        selectPartInGrid(partId);
+        setTimeout(() => {
+            addPartToSentence();
+        }, 50);
+    }
+}
+
+// 右クリックハンドラー（コンテキストメニュー）
+function handlePartRightClick(partId, event) {
+    event.preventDefault();
+
+    const part = partsData.find(p => p.id === partId);
+    if (!part) return;
+
+    // 簡易コンテキストメニューを作成
+    const menu = createContextMenu([
+        {
+            label: '📌 選択',
+            action: () => selectPartInGrid(partId)
+        },
+        {
+            label: '➕ 追加',
+            action: () => {
+                selectPartInGrid(partId);
+                setTimeout(() => addPartToSentence(), 50);
+            }
+        },
+        {
+            label: '🔍 詳細表示',
+            action: () => showPartDetails(part)
+        }
+    ], event.pageX, event.pageY);
+
+    document.body.appendChild(menu);
+}
+
+// 簡易コンテキストメニューの作成
+function createContextMenu(items, x, y) {
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.position = 'absolute';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.background = 'var(--background-card)';
+    menu.style.border = '1px solid var(--border-color)';
+    menu.style.borderRadius = '4px';
+    menu.style.boxShadow = 'var(--shadow-md)';
+    menu.style.zIndex = '1000';
+    menu.style.minWidth = '120px';
+
+    items.forEach(item => {
+        const menuItem = document.createElement('div');
+        menuItem.textContent = item.label;
+        menuItem.style.padding = '8px 12px';
+        menuItem.style.cursor = 'pointer';
+        menuItem.style.borderBottom = '1px solid var(--border-light)';
+
+        menuItem.addEventListener('click', () => {
+            item.action();
+            document.body.removeChild(menu);
+        });
+
+        menuItem.addEventListener('mouseenter', () => {
+            menuItem.style.backgroundColor = 'var(--primary-light)';
+        });
+
+        menuItem.addEventListener('mouseleave', () => {
+            menuItem.style.backgroundColor = 'var(--background-card)';
+        });
+
+        menu.appendChild(menuItem);
+    });
+
+    // メニュー外クリックで閉じる
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(event) {
+            if (!menu.contains(event.target)) {
+                document.removeEventListener('click', closeMenu);
+                if (menu.parentNode) {
+                    document.body.removeChild(menu);
+                }
+            }
+        });
+    }, 0);
+
+    return menu;
+}
+
+// パーツ詳細表示
+function showPartDetails(part) {
+    const message = `
+        <strong>パーツ詳細</strong><br>
+        <strong>ID:</strong> ${part.id}<br>
+        <strong>テキスト:</strong> ${part.text}<br>
+        <strong>音声ファイル:</strong> ${part.audio}
+    `;
+    showMessage('sentences-messages', 'info', message);
+    hideMessagesAfterDelay('sentences-messages', 4000);
 }
 
 // 文章にパーツ追加
@@ -1442,25 +1788,26 @@ function addPartToSentence() {
     try {
         console.log('文章パーツ追加開始');
 
-        // 新しいシステムから選択されたIDを取得
-        let selectedId = selectedPartInGrid || document.getElementById('available-parts')?.value;
+        // 選択されたIDを取得
+        let selectedId = selectedPartInGrid || AppState.ui.selectedPartInGrid;
 
         console.log('選択されたパーツID:', selectedId);
 
         if (!selectedId) {
-            showMessage('sentences-messages', 'warning', 'パーツを選択してください。');
+            showMessage('sentences-messages', 'error', 'パーツを選択してください。');
             return;
         }
 
         const selectedPart = partsData.find(part => part.id === selectedId);
         if (!selectedPart) {
-            showMessage('sentences-messages', 'error', '選択されたパーツが見つかりません。');
+            showMessage('sentences-messages', 'error', `選択されたパーツ「${selectedId}」が見つかりません。`);
             return;
         }
 
         const container = document.getElementById('selected-parts');
         if (!container) {
-            throw new Error('selected-parts コンテナが見つかりません');
+            showMessage('sentences-messages', 'error', '選択パーツ表示エリアが見つかりません。');
+            return;
         }
 
         // 初回追加時に「まだパーツが選択されていません」のメッセージを削除
@@ -1489,8 +1836,16 @@ function addPartToSentence() {
 
         container.appendChild(partSpan);
 
-        // 選択をクリア
-        clearPartsSearch();
+        // 選択をクリア（修正版）
+        selectedPartInGrid = null;
+        AppState.ui.selectedPartInGrid = null;
+        document.querySelectorAll('.part-option.selected').forEach(option => {
+            option.classList.remove('selected');
+        });
+        const addButton = document.getElementById('add-part-btn');
+        if (addButton) {
+            addButton.disabled = true;
+        }
 
         // 移動ボタンの状態を更新
         updateMoveButtonStates();
@@ -1692,14 +2047,14 @@ function updateSentencesDisplay() {
         sentenceDiv.innerHTML = `
             <h4>${sentence.text}</h4>
             <div class="sentence-parts-preview">${partsPreview}</div>
-            <div style="color: #666; font-size: 0.9em;">パーツID: ${sentence.partIds.join(', ')}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">パーツID: ${sentence.partIds.join(', ')}</div>
             <button onclick="removeSentence(${index})" class="btn btn-danger btn-small" style="margin-top: 10px;">削除</button>
         `;
         container.appendChild(sentenceDiv);
     });
 
     if (sentencesData.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">文章パターンが登録されていません。</p>';
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">文章パターンが登録されていません。</p>';
     }
 }
 
@@ -2560,13 +2915,13 @@ async function suggestIdFromText() {
 
                 // 解析エンジンの表示
                 const engineInfo = morphologyTokenizer ? ' 🤖' : ' 📚';
-                hintElement.innerHTML = `<small style="color: #666;">${hint}${engineInfo}</small>`;
+                hintElement.innerHTML = `<small style="color: var(--text-secondary);">${hint}${engineInfo}</small>`;
             } else {
                 hintElement.textContent = '';
             }
         } catch (error) {
             console.error('ID候補生成エラー:', error);
-            hintElement.innerHTML = `<small style="color: #999;">解析中...</small>`;
+            hintElement.innerHTML = `<small style="color: var(--text-muted);">解析中...</small>`;
         }
     } else {
         hintElement.textContent = '';
@@ -3776,7 +4131,7 @@ function populateCustomDictManager() {
             <span>
                 ${entry.isCustom ?
                 `<button class="dict-item-delete" onclick="removeCustomDictEntry('${entry.word}')">削除</button>` :
-                '<span style="color: #6c757d; font-size: 0.8em;">デフォルト</span>'
+                '<span style="color: var(--text-muted); font-size: 0.8em;">デフォルト</span>'
             }
             </span>
         `;
@@ -4021,4 +4376,517 @@ function usePattern(text, id) {
     showMessage('parts-messages', 'success', `パターン「${text}」を設定しました！`);
     hideMessagesAfterDelay('parts-messages');
 }
+
+// デバイス設定検出・適用システム
+function initializeDeviceSettings() {
+    console.log('🔧 デバイス設定を初期化中...');
+
+    // 保存された自動適用設定を読み込み
+    const autoApply = localStorage.getItem('deviceAutoApply');
+    AppState.device.autoApply = autoApply !== null ? autoApply === 'true' : true;
+
+    // デバイス設定を検出
+    detectDeviceSettings();
+
+    // 自動適用が有効な場合、設定を適用
+    if (AppState.device.autoApply) {
+        applyDeviceSettings();
+    }
+
+    // 設定変更の監視を開始
+    startDeviceSettingsMonitoring();
+
+    // イベントリスナーを設定
+    setupDeviceSettingsEventListeners();
+
+    console.log('✅ デバイス設定初期化完了:', AppState.device);
+}
+
+function setupDeviceSettingsEventListeners() {
+    console.log('🎯 デバイス設定イベントリスナーを設定中...');
+
+    try {
+        // 自動適用切り替えチェックボックス
+        const autoApplyToggle = document.getElementById('auto-apply-toggle');
+        if (autoApplyToggle) {
+            autoApplyToggle.addEventListener('change', function (event) {
+                try {
+                    toggleDeviceAutoApply();
+                } catch (error) {
+                    console.error('自動適用切り替えエラー:', error);
+                    showMessage('parts-messages', 'error', 'デバイス設定の切り替えでエラーが発生しました');
+                }
+            });
+            autoApplyToggle.checked = AppState.device.autoApply;
+            console.log('✅ 自動適用チェックボックス設定完了');
+        } else {
+            console.warn('⚠️ auto-apply-toggle要素が見つかりません');
+        }
+
+        // タッチ無効化切り替えチェックボックス
+        const forceDisableTouchToggle = document.getElementById('force-disable-touch');
+        if (forceDisableTouchToggle) {
+            forceDisableTouchToggle.addEventListener('change', function (event) {
+                try {
+                    toggleTouchOptimization();
+                } catch (error) {
+                    console.error('タッチ最適化切り替えエラー:', error);
+                    showMessage('parts-messages', 'error', 'タッチ設定の切り替えでエラーが発生しました');
+                }
+            });
+
+            // 保存されたタッチ無効化設定を反映
+            const forceDisableTouch = localStorage.getItem('forceDisableTouch');
+            if (forceDisableTouch === 'true') {
+                forceDisableTouchToggle.checked = true;
+            }
+            console.log('✅ タッチ無効化チェックボックス設定完了');
+        } else {
+            console.warn('⚠️ force-disable-touch要素が見つかりません');
+        }
+
+        console.log('✅ デバイス設定イベントリスナー設定完了');
+    } catch (error) {
+        console.error('❌ デバイス設定イベントリスナー設定エラー:', error);
+    }
+}
+
+function detectDeviceSettings() {
+    // カラースキーム検出
+    AppState.device.colorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+    // アニメーション減少設定
+    AppState.device.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // ハイコントラスト設定
+    AppState.device.highContrast = window.matchMedia('(prefers-contrast: high)').matches;
+
+    // 強制色設定
+    AppState.device.forcedColors = window.matchMedia('(forced-colors: active)').matches;
+
+    // モバイル固定設定（チェックボックスなどのUI要素をモバイル統一）
+    AppState.device.touchDevice = true; // 完全モバイル固定（デバイス検出無し）
+
+    // bodyクラス設定
+    document.body.classList.add('touch-device');
+
+    // 画面サイズ検出
+    const width = window.innerWidth;
+    if (width < 768) {
+        AppState.device.screenSize = 'mobile';
+    } else if (width < 1024) {
+        AppState.device.screenSize = 'tablet';
+    } else {
+        AppState.device.screenSize = 'desktop';
+    }
+
+    // デバイスピクセル比
+    AppState.device.pixelRatio = window.devicePixelRatio || 1;
+
+    // ネットワーク接続情報（対応ブラウザのみ）
+    if ('connection' in navigator) {
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        AppState.device.connection = connection ? connection.effectiveType || 'unknown' : 'unknown';
+    }
+
+    // 言語設定
+    AppState.device.language = navigator.language || navigator.userLanguage || 'ja';
+
+    // タイムゾーン
+    AppState.device.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
+
+    console.log('📱 デバイス設定検出完了:', AppState.device);
+}
+
+function detectTouchDevice() {
+    // モバイルファーストUI - 全デバイス統一でタッチデバイス扱い
+    console.log('📱 モバイルファーストUI: 全デバイスでタッチデバイス設定');
+    return true;
+}
+
+function applyDeviceSettings() {
+    console.log('⚙️ デバイス設定を適用中...');
+
+    // テーマの自動適用
+    if (!localStorage.getItem('theme')) {
+        AppState.ui.theme = AppState.device.colorScheme;
+        applyTheme(AppState.ui.theme);
+        updateThemeToggleButton();
+    }
+
+    // アニメーション設定の適用
+    applyMotionSettings();
+
+    // コントラスト設定の適用
+    applyContrastSettings();
+
+    // タッチデバイス最適化
+    applyTouchOptimizations();
+
+    // 画面サイズ最適化
+    applyScreenSizeOptimizations();
+
+    // ネットワーク最適化
+    applyNetworkOptimizations();
+
+    // 言語設定の適用
+    applyLanguageSettings();
+
+    console.log('✅ デバイス設定適用完了');
+}
+
+function applyMotionSettings() {
+    const body = document.body;
+
+    if (AppState.device.reducedMotion) {
+        body.classList.add('reduced-motion');
+        console.log('🎭 アニメーション減少モードを適用');
+    } else {
+        body.classList.remove('reduced-motion');
+    }
+}
+
+function applyContrastSettings() {
+    const body = document.body;
+
+    if (AppState.device.highContrast) {
+        body.classList.add('high-contrast');
+        console.log('🔆 ハイコントラストモードを適用');
+    } else {
+        body.classList.remove('high-contrast');
+    }
+
+    if (AppState.device.forcedColors) {
+        body.classList.add('forced-colors');
+        console.log('🎨 強制色モードを適用');
+    } else {
+        body.classList.remove('forced-colors');
+    }
+}
+
+function applyTouchOptimizations() {
+    const body = document.body;
+
+    if (AppState.device.touchDevice) {
+        body.classList.add('touch-device');
+        console.log('👆 タッチデバイス最適化を適用');
+
+        // タッチ用のボタンサイズ調整
+        document.documentElement.style.setProperty('--touch-target-size', '44px');
+    } else {
+        body.classList.remove('touch-device');
+        document.documentElement.style.setProperty('--touch-target-size', '32px');
+    }
+}
+
+function applyScreenSizeOptimizations() {
+    const body = document.body;
+
+    // 既存のクラスをクリア
+    body.classList.remove('mobile-device', 'tablet-device', 'desktop-device');
+
+    // 新しいクラスを追加
+    body.classList.add(`${AppState.device.screenSize}-device`);
+
+    console.log(`📱 ${AppState.device.screenSize}最適化を適用`);
+}
+
+function applyNetworkOptimizations() {
+    const body = document.body;
+
+    if (AppState.device.connection === 'slow-2g' || AppState.device.connection === '2g') {
+        body.classList.add('slow-network');
+        console.log('🐌 低速ネットワーク最適化を適用');
+    } else {
+        body.classList.remove('slow-network');
+    }
+}
+
+function applyLanguageSettings() {
+    // HTML要素のlang属性を設定
+    document.documentElement.lang = AppState.device.language.split('-')[0];
+
+    // 日本語以外の場合の最適化（将来の国際化対応）
+    if (!AppState.device.language.startsWith('ja')) {
+        document.body.classList.add('non-japanese');
+        console.log(`🌐 言語設定を適用: ${AppState.device.language}`);
+    }
+}
+
+function startDeviceSettingsMonitoring() {
+    console.log('👁️ デバイス設定監視を開始');
+
+    // カラースキーム変更の監視
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        AppState.device.colorScheme = e.matches ? 'dark' : 'light';
+        console.log(`🎨 カラースキーム変更検出: ${AppState.device.colorScheme}`);
+
+        if (AppState.device.autoApply && !localStorage.getItem('theme')) {
+            AppState.ui.theme = AppState.device.colorScheme;
+            applyTheme(AppState.ui.theme);
+            updateThemeToggleButton();
+        }
+    });
+
+    // アニメーション設定変更の監視
+    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (e) => {
+        AppState.device.reducedMotion = e.matches;
+        console.log(`🎭 アニメーション設定変更検出: ${e.matches ? '減少' : '通常'}`);
+
+        if (AppState.device.autoApply) {
+            applyMotionSettings();
+        }
+    });
+
+    // コントラスト設定変更の監視
+    window.matchMedia('(prefers-contrast: high)').addEventListener('change', (e) => {
+        AppState.device.highContrast = e.matches;
+        console.log(`🔆 コントラスト設定変更検出: ${e.matches ? 'ハイ' : '通常'}`);
+
+        if (AppState.device.autoApply) {
+            applyContrastSettings();
+        }
+    });
+
+    // 画面サイズ変更の監視
+    const resizeObserver = new ResizeObserver(() => {
+        const oldScreenSize = AppState.device.screenSize;
+        detectDeviceSettings();
+
+        if (oldScreenSize !== AppState.device.screenSize && AppState.device.autoApply) {
+            console.log(`📱 画面サイズ変更検出: ${oldScreenSize} → ${AppState.device.screenSize}`);
+            applyScreenSizeOptimizations();
+        }
+    });
+
+    resizeObserver.observe(document.body);
+
+    // ネットワーク接続変更の監視（対応ブラウザのみ）
+    if ('connection' in navigator) {
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (connection) {
+            connection.addEventListener('change', () => {
+                const oldConnection = AppState.device.connection;
+                AppState.device.connection = connection.effectiveType || 'unknown';
+
+                if (oldConnection !== AppState.device.connection && AppState.device.autoApply) {
+                    console.log(`📶 ネットワーク接続変更検出: ${oldConnection} → ${AppState.device.connection}`);
+                    applyNetworkOptimizations();
+                }
+            });
+        }
+    }
+}
+
+function toggleDeviceAutoApply() {
+    AppState.device.autoApply = !AppState.device.autoApply;
+    localStorage.setItem('deviceAutoApply', AppState.device.autoApply.toString());
+
+    console.log(`🔄 デバイス設定自動適用: ${AppState.device.autoApply ? 'ON' : 'OFF'}`);
+
+    if (AppState.device.autoApply) {
+        // 再検出して適用
+        detectDeviceSettings();
+        applyDeviceSettings();
+        showMessage('parts-messages', 'success', 'デバイス設定の自動適用を有効にしました');
+    } else {
+        showMessage('parts-messages', 'info', 'デバイス設定の自動適用を無効にしました');
+    }
+
+    updateDeviceInfoDisplay();
+}
+
+// グローバルスコープに確実に配置
+window.toggleDeviceAutoApply = toggleDeviceAutoApply;
+
+function toggleTouchOptimization() {
+    const forceDisableTouch = document.getElementById('force-disable-touch').checked;
+    localStorage.setItem('forceDisableTouch', forceDisableTouch.toString());
+
+    console.log(`📱 タッチ最適化強制無効化: ${forceDisableTouch ? 'ON' : 'OFF'}`);
+
+    // タッチデバイス設定を再計算
+    const originalTouchDevice = detectTouchDevice();
+    AppState.device.touchDevice = forceDisableTouch ? false : originalTouchDevice;
+
+    // タッチ最適化を再適用
+    applyTouchOptimizations();
+
+    if (forceDisableTouch) {
+        showMessage('parts-messages', 'success', 'タッチデバイス最適化を強制的に無効化しました');
+    } else {
+        showMessage('parts-messages', 'info', 'タッチデバイス最適化の強制無効化を解除しました');
+    }
+
+    updateDeviceInfoDisplay();
+}
+
+// グローバルスコープに確実に配置
+window.toggleTouchOptimization = toggleTouchOptimization;
+
+// デバイス設定パネル制御
+function toggleDeviceSettingsPanel() {
+    const panel = document.getElementById('device-settings-panel');
+    const button = document.getElementById('device-settings-toggle');
+
+    if (panel.style.display === 'none' || !panel.style.display) {
+        panel.style.display = 'block';
+        button.classList.add('active');
+        updateDeviceInfoDisplay();
+
+        // パネル外クリックで閉じる
+        setTimeout(() => {
+            document.addEventListener('click', handlePanelOutsideClick);
+        }, 100);
+    } else {
+        closeDeviceSettingsPanel();
+    }
+}
+
+function closeDeviceSettingsPanel() {
+    const panel = document.getElementById('device-settings-panel');
+    const button = document.getElementById('device-settings-toggle');
+
+    panel.style.display = 'none';
+    button.classList.remove('active');
+
+    document.removeEventListener('click', handlePanelOutsideClick);
+}
+
+function handlePanelOutsideClick(event) {
+    const panel = document.getElementById('device-settings-panel');
+    const button = document.getElementById('device-settings-toggle');
+
+    if (!panel.contains(event.target) && !button.contains(event.target)) {
+        closeDeviceSettingsPanel();
+    }
+}
+
+function updateDeviceInfoDisplay() {
+    const deviceInfoContainer = document.getElementById('device-info');
+    const autoApplyToggle = document.getElementById('auto-apply-toggle');
+
+    if (!deviceInfoContainer) return;
+
+    // トグルの状態を同期
+    if (autoApplyToggle) {
+        autoApplyToggle.checked = AppState.device.autoApply;
+    }
+
+    // デバイス情報を表示
+    const deviceInfo = [
+        { label: 'カラースキーム', value: AppState.device.colorScheme === 'dark' ? 'ダーク' : 'ライト' },
+        { label: 'アニメーション', value: AppState.device.reducedMotion ? '減少' : '通常' },
+        { label: 'コントラスト', value: AppState.device.highContrast ? 'ハイ' : '通常' },
+        { label: '強制色', value: AppState.device.forcedColors ? '有効' : '無効' },
+        { label: 'デバイス', value: AppState.device.touchDevice ? 'タッチ' : 'デスクトップ' },
+        { label: '画面サイズ', value: AppState.device.screenSize },
+        { label: 'ピクセル比', value: `${AppState.device.pixelRatio}x` },
+        { label: 'ネットワーク', value: AppState.device.connection },
+        { label: '言語', value: AppState.device.language },
+        { label: 'タイムゾーン', value: AppState.device.timezone }
+    ];
+
+    deviceInfoContainer.innerHTML = deviceInfo.map(info => `
+        <div class="device-info-item">
+            <span class="device-info-label">${info.label}:</span>
+            <span class="device-info-value">${info.value}</span>
+        </div>
+    `).join('');
+}
+
+// 既存のテーマ初期化を拡張
+function initializeTheme() {
+    console.log('🎨 テーマ初期化中...');
+
+    // デバイス設定を先に初期化
+    initializeDeviceSettings();
+
+    // デバイス設定のイベントリスナーを遅延設定（DOM要素が確実に存在するため）
+    setTimeout(() => {
+        setupDeviceSettingsEventListeners();
+    }, 100);
+
+    // ローカルストレージからテーマを読み込み
+    const savedTheme = localStorage.getItem('theme');
+
+    if (savedTheme) {
+        // ユーザーが明示的に設定したテーマを使用
+        AppState.ui.theme = savedTheme;
+        console.log(`💾 保存されたテーマを適用: ${savedTheme}`);
+    } else if (AppState.device.autoApply) {
+        // デバイス設定から自動適用
+        AppState.ui.theme = AppState.device.colorScheme;
+        console.log(`📱 デバイス設定からテーマを適用: ${AppState.device.colorScheme}`);
+    } else {
+        // デフォルト
+        AppState.ui.theme = 'light';
+        console.log('🌟 デフォルトテーマを適用: light');
+    }
+
+    applyTheme(AppState.ui.theme);
+    updateThemeToggleButton();
+
+    // システムのテーマ変更を監視（ユーザーが明示的に設定していない場合のみ）
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme') && AppState.device.autoApply) {
+            AppState.ui.theme = e.matches ? 'dark' : 'light';
+            applyTheme(AppState.ui.theme);
+            updateThemeToggleButton();
+            console.log(`🔄 システムテーマ変更を検出・適用: ${AppState.ui.theme}`);
+        }
+    });
+} function toggleTheme() {
+    AppState.ui.theme = AppState.ui.theme === 'light' ? 'dark' : 'light';
+    applyTheme(AppState.ui.theme);
+    updateThemeToggleButton();
+
+    // ローカルストレージに保存
+    localStorage.setItem('theme', AppState.ui.theme);
+
+    // アニメーション効果
+    const button = document.getElementById('theme-toggle');
+    button.style.transform = 'scale(0.9)';
+    setTimeout(() => {
+        button.style.transform = 'scale(1)';
+    }, 150);
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+
+    // パフォーマンス最適化のため、テーマ変更時に再描画を最適化
+    requestAnimationFrame(() => {
+        // テーマ変更のアニメーション
+        document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
+        setTimeout(() => {
+            document.body.style.transition = '';
+        }, 300);
+    });
+}
+
+function updateThemeToggleButton() {
+    const button = document.getElementById('theme-toggle');
+    const icon = button?.querySelector('.theme-icon');
+
+    if (icon) {
+        icon.textContent = AppState.ui.theme === 'dark' ? '☀️' : '🌙';
+        button.title = AppState.ui.theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
+    }
+}
+
+// ページ読み込み時にテーマを初期化
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 アプリケーション初期化開始');
+
+    // テーマとデバイス設定を初期化
+    initializeTheme();
+
+    // デバイス設定パネルの初期状態を設定
+    setTimeout(() => {
+        updateDeviceInfoDisplay();
+    }, 100);
+
+    console.log('✅ アプリケーション初期化完了');
+});
 
