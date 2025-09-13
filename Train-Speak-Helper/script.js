@@ -586,6 +586,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     console.log('✅ 基本初期化完了');
 
+    // テーマとデバイス設定の初期化
+    initializeTheme();
+
     // デバイス設定の検出と適用
     detectDeviceSettings();
     if (AppState.device.autoApply) {
@@ -4706,5 +4709,84 @@ function showDebug() {
             modal.remove();
         }
     });
+}
+
+// テーマ関連の関数群
+function initializeTheme() {
+    console.log('🎨 テーマ初期化中...');
+
+    // デバイス設定を先に初期化
+    detectDeviceSettings();
+
+    // ローカルストレージからテーマを読み込み
+    const savedTheme = localStorage.getItem('theme');
+
+    if (savedTheme) {
+        // ユーザーが明示的に設定したテーマを使用
+        AppState.ui.theme = savedTheme;
+        console.log(`💾 保存されたテーマを適用: ${savedTheme}`);
+    } else if (AppState.device.autoApply) {
+        // デバイス設定から自動適用
+        AppState.ui.theme = AppState.device.colorScheme;
+        console.log(`📱 デバイス設定からテーマを適用: ${AppState.device.colorScheme}`);
+    } else {
+        // デフォルト
+        AppState.ui.theme = 'light';
+        console.log('🌟 デフォルトテーマを適用: light');
+    }
+
+    applyTheme(AppState.ui.theme);
+    updateThemeToggleButton();
+
+    // システムのテーマ変更を監視（ユーザーが明示的に設定していない場合のみ）
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme') && AppState.device.autoApply) {
+            AppState.ui.theme = e.matches ? 'dark' : 'light';
+            applyTheme(AppState.ui.theme);
+            updateThemeToggleButton();
+            console.log(`🔄 システムテーマ変更を検出・適用: ${AppState.ui.theme}`);
+        }
+    });
+}
+
+function toggleTheme() {
+    AppState.ui.theme = AppState.ui.theme === 'light' ? 'dark' : 'light';
+    applyTheme(AppState.ui.theme);
+    updateThemeToggleButton();
+
+    // ローカルストレージに保存
+    localStorage.setItem('theme', AppState.ui.theme);
+
+    // アニメーション効果
+    const button = document.getElementById('theme-toggle');
+    if (button) {
+        button.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+            button.style.transform = 'scale(1)';
+        }, 150);
+    }
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+
+    // パフォーマンス最適化のため、テーマ変更時に再描画を最適化
+    requestAnimationFrame(() => {
+        // テーマ変更のアニメーション
+        document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
+        setTimeout(() => {
+            document.body.style.transition = '';
+        }, 300);
+    });
+}
+
+function updateThemeToggleButton() {
+    const button = document.getElementById('theme-toggle');
+    const icon = button?.querySelector('.theme-icon');
+
+    if (icon) {
+        icon.textContent = AppState.ui.theme === 'dark' ? '☀️' : '🌙';
+        button.title = AppState.ui.theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
+    }
 }
 

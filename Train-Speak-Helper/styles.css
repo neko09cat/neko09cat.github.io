@@ -105,6 +105,43 @@
     justify-content: flex-end;
 }
 
+/* Details要素のスタイル */
+details.card {
+    display: block;
+    margin: var(--spacing-lg) 0;
+    overflow: hidden;
+}
+
+details.card summary {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+details.card summary:hover {
+    background: var(--background-hover);
+}
+
+details.card[open] summary {
+    border-bottom: 1px solid var(--border-light);
+}
+
+details.card .card-content {
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* 2. グリッドシステム */
 .grid {
     display: grid;
@@ -578,6 +615,22 @@
     --border-radius-md: 5px;
     --border-radius-lg: 8px;
     --border-radius-xl: 10px;
+
+    /* アニメーション統一 */
+    --animation-duration: 0.3s;
+    --animation-timing: ease-out;
+
+    /* ホバー効果 */
+    --background-hover: rgba(0, 0, 0, 0.05);
+    --border-dark: #718096;
+
+    /* 短縮名エイリアス（下位互換性） */
+    --primary: var(--primary-color);
+    --secondary: var(--secondary-color);
+    --success: var(--success-color);
+    --danger: var(--danger-color);
+    --warning: var(--warning-color);
+    --info: var(--info-color);
 }
 
 /* ダークモード */
@@ -609,21 +662,23 @@
     --secondary-light: #2c3e50;
 
     /* ベースカラー（ダークモード） */
-    --text-primary: #ecf0f1;
-    --text-secondary: #bdc3c7;
-    --text-muted: #95a5a6;
-    --text-light: #2c3e50;
+    --text-primary: #f0f0f0;
+    --text-secondary: #c0c0c0;
+    --text-muted: #a0a0a0;
+    --text-light: #ffffff;
     --text-inverse: #2c3e50;
 
     --background-body: #1a1a1a;
     --background-body-accent: #2a2a2a;
     --background-card: #2c3e50;
     --background-light: #34495e;
-    --background-dark: #ecf0f1;
+    --background-dark: #1a1a1a;
     --background-overlay: rgba(255, 255, 255, 0.1);
+    --background-hover: rgba(255, 255, 255, 0.05);
 
     --border-color: #4a5568;
     --border-light: #2d3748;
+    --border-dark: #718096;
     --border-focus: var(--primary-color);
 
     /* 影（ダークモード） */
@@ -637,6 +692,18 @@
     --glass-background-strong: rgba(45, 55, 72, 0.95);
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-highlight: rgba(255, 255, 255, 0.1);
+
+    /* アニメーション統一（ダークモード） */
+    --animation-duration: 0.3s;
+    --animation-timing: ease-out;
+
+    /* 短縮名エイリアス（下位互換性） */
+    --primary: var(--primary-color);
+    --secondary: var(--secondary-color);
+    --success: var(--success-color);
+    --danger: var(--danger-color);
+    --warning: var(--warning-color);
+    --info: var(--info-color);
 }
 
 /* ダークモード専用の追加スタイル */
@@ -649,12 +716,17 @@
 }
 
 [data-theme="dark"] .btn {
+    background-color: var(--background-card);
+    color: #ffffff;
+    border-color: var(--border-color);
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.3),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 [data-theme="dark"] .btn:hover {
+    background-color: var(--background-hover);
+    border-color: var(--border-focus);
     box-shadow:
         0 8px 25px rgba(0, 0, 0, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.15);
@@ -683,6 +755,116 @@
         0 0 0 3px rgba(59, 130, 246, 0.3),
         0 8px 25px rgba(0, 0, 0, 0.3),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ダークモード - テキストクラス対応 */
+[data-theme="dark"] .text-primary {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .text-secondary {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .text-muted {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .text-light {
+    color: var(--text-light);
+}
+
+[data-theme="dark"] .text-danger {
+    color: var(--danger-color);
+}
+
+[data-theme="dark"] .text-success {
+    color: var(--success-color);
+}
+
+[data-theme="dark"] .text-warning {
+    color: var(--warning-color);
+}
+
+[data-theme="dark"] .text-info {
+    color: var(--info-color);
+}
+
+/* ダークモード - ボタンクラス対応 */
+[data-theme="dark"] .btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-primary:hover {
+    background-color: var(--primary-hover);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-secondary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+    background-color: var(--secondary-hover);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-success {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-success:hover {
+    background-color: var(--success-hover);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-danger {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-danger:hover {
+    background-color: var(--danger-hover);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-warning {
+    background-color: var(--warning-color);
+    border-color: var(--warning-color);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-warning:hover {
+    background-color: var(--warning-hover);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-info {
+    background-color: var(--info-color);
+    border-color: var(--info-color);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-info:hover {
+    background-color: var(--info-hover);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-outline {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+[data-theme="dark"] .btn-outline:hover {
+    background-color: var(--primary-color);
+    color: #ffffff;
 }
 
 /* スクロールバーのスタイル統一 */
@@ -847,12 +1029,12 @@ header {
 }
 
 .header-controls {
-    position: absolute;
-    top: var(--spacing-lg);
-    right: var(--spacing-lg);
-    z-index: 1000;
+    position: relative;
     display: flex;
     gap: var(--spacing-sm);
+    justify-content: flex-end;
+    margin-bottom: var(--spacing-md);
+    z-index: 1000;
 }
 
 .theme-toggle,
@@ -1537,7 +1719,7 @@ select {
     justify-content: center;
     gap: var(--spacing-xs);
     padding: var(--spacing-md) var(--spacing-xl);
-    border: none;
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius-md);
     cursor: pointer;
     font-size: var(--font-size-base);
@@ -1550,11 +1732,11 @@ select {
     user-select: none;
     outline: none;
     margin-right: var(--spacing-sm);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     position: relative;
     overflow: hidden;
-    background: linear-gradient(135deg, var(--background-card), var(--background-light));
-    border: 1px solid var(--border-light);
+    background-color: var(--background-card);
+    color: var(--text-primary);
 }
 
 .btn::before {
@@ -1573,14 +1755,23 @@ select {
 }
 
 .btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(74, 144, 226, 0.2);
-    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background-color: var(--background-hover);
+    border-color: var(--border-focus);
 }
 
 .btn:focus {
-    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.3), 0 8px 25px rgba(0, 0, 0, 0.15);
+    background-color: var(--background-card);
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.3), 0 4px 12px rgba(0, 0, 0, 0.15);
     outline: none;
+}
+
+.btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    background-color: var(--background-hover);
 }
 
 .btn:active {
@@ -1593,57 +1784,22 @@ select {
     cursor: not-allowed;
     transform: none !important;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-color: var(--background-light) !important;
+    color: var(--text-muted) !important;
+    border-color: var(--border-light) !important;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    background-color: var(--primary-color);
     color: var(--text-light);
-    border-color: var(--primary);
-    box-shadow: 0 4px 14px rgba(74, 144, 226, 0.3);
+    border-color: var(--primary-color);
+}
+
+[data-theme="dark"] .btn-primary {
+    color: #ffffff;
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, var(--primary-light), var(--primary));
-    box-shadow: 0 8px 25px rgba(74, 144, 226, 0.4), 0 0 0 1px rgba(74, 144, 226, 0.5);
-}
-
-.btn-success {
-    background: linear-gradient(135deg, var(--success), #27d876);
-    color: var(--text-light);
-    border-color: var(--success);
-    box-shadow: 0 4px 14px rgba(46, 204, 113, 0.3);
-}
-
-.btn-success:hover {
-    background: linear-gradient(135deg, #27d876, var(--success));
-    box-shadow: 0 8px 25px rgba(46, 204, 113, 0.4), 0 0 0 1px rgba(46, 204, 113, 0.5);
-}
-
-.btn-danger {
-    background: linear-gradient(135deg, var(--danger), #ff4757);
-    color: var(--text-light);
-    border-color: var(--danger);
-    box-shadow: 0 4px 14px rgba(231, 76, 60, 0.3);
-}
-
-.btn-danger:hover {
-    background: linear-gradient(135deg, #ff4757, var(--danger));
-    box-shadow: 0 8px 25px rgba(231, 76, 60, 0.4), 0 0 0 1px rgba(231, 76, 60, 0.5);
-}
-
-.btn-secondary {
-    background: linear-gradient(135deg, var(--secondary), var(--secondary-light));
-    color: var(--text-primary);
-    border-color: var(--secondary);
-    box-shadow: 0 4px 14px rgba(128, 139, 150, 0.2);
-}
-
-.btn-secondary:hover {
-    background: linear-gradient(135deg, var(--secondary-light), var(--secondary));
-    box-shadow: 0 8px 25px rgba(128, 139, 150, 0.3), 0 0 0 1px rgba(128, 139, 150, 0.4);
-}
-
-.btn-primary:hover:not(:disabled) {
     background-color: var(--primary-hover);
     transform: translateY(-1px);
 }
@@ -1651,9 +1807,14 @@ select {
 .btn-success {
     background-color: var(--success-color);
     color: var(--text-light);
+    border-color: var(--success-color);
 }
 
-.btn-success:hover:not(:disabled) {
+[data-theme="dark"] .btn-success {
+    color: #ffffff;
+}
+
+.btn-success:hover {
     background-color: var(--success-hover);
     transform: translateY(-1px);
 }
@@ -1661,16 +1822,39 @@ select {
 .btn-danger {
     background-color: var(--danger-color);
     color: var(--text-light);
+    border-color: var(--danger-color);
 }
 
-.btn-danger:hover:not(:disabled) {
+[data-theme="dark"] .btn-danger {
+    color: #ffffff;
+}
+
+.btn-danger:hover {
     background-color: var(--danger-hover);
     transform: translateY(-1px);
 }
 
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-primary);
+    border-color: var(--secondary-color);
+}
+
+.btn-secondary:hover {
+    background-color: var(--secondary-hover);
+    transform: translateY(-1px);
+}
+
+
+
 .btn-info {
     background-color: var(--info-color);
     color: var(--text-light);
+    border-color: var(--info-color);
+}
+
+[data-theme="dark"] .btn-info {
+    color: #ffffff;
 }
 
 .btn-info:hover:not(:disabled) {
@@ -1678,23 +1862,20 @@ select {
     transform: translateY(-1px);
 }
 
+/* ボタンのサイズ調整 */
+
 .btn-warning {
     background-color: var(--warning-color);
     color: var(--text-light);
+    border-color: var(--warning-color);
+}
+
+[data-theme="dark"] .btn-warning {
+    color: #ffffff;
 }
 
 .btn-warning:hover:not(:disabled) {
     background-color: var(--warning-hover);
-    transform: translateY(-1px);
-}
-
-.btn-secondary {
-    background-color: var(--secondary-color);
-    color: var(--text-light);
-}
-
-.btn-secondary:hover:not(:disabled) {
-    background-color: var(--secondary-hover);
     transform: translateY(-1px);
 }
 
@@ -2441,16 +2622,21 @@ label:has(input[type="checkbox"]) {
 /* ダークモード対応 */
 [data-theme="dark"] input[type="checkbox"] {
     border-color: var(--border-dark);
-    background: var(--background-secondary);
+    background: var(--background-card);
 }
 
 [data-theme="dark"] input[type="checkbox"]:hover {
-    border-color: var(--primary-light);
-    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(93, 173, 226, 0.2);
 }
 
 [data-theme="dark"] input[type="checkbox"]:focus {
-    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.3);
+    box-shadow: 0 0 0 3px rgba(93, 173, 226, 0.3);
+}
+
+[data-theme="dark"] input[type="checkbox"]:checked {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
 }
 
 /* 無効状態のスタイル */
@@ -2701,10 +2887,6 @@ input[type="checkbox"]:disabled:hover {
 }
 
 /* パフォーマンス最適化 */
-:root {
-    --animation-duration: 0.3s;
-    --animation-timing: ease-out;
-}
 
 /* GPU加速を有効化 */
 .card,
@@ -2953,6 +3135,99 @@ button:disabled {
     border: 1px solid var(--warning-color);
     border-radius: 6px;
     color: var(--text-primary);
+}
+
+/* VOICEVOX出力エリアの調整 */
+.voicevox-output {
+    margin-top: 20px;
+}
+
+.voicevox-output textarea {
+    height: 200px;
+}
+
+.voicevox-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.voicevox-download-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+/* CSVエクスポート関連 */
+.csv-export-info {
+    background: var(--info-light);
+    border: 1px solid var(--info-color);
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.csv-export-info .info-item {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-sm);
+}
+
+.csv-export-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-lg);
+}
+
+.csv-preview {
+    background: var(--background-light);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-lg);
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+    white-space: pre-wrap;
+    font-size: var(--font-size-sm);
+}
+
+.bulk-actions {
+    margin-bottom: var(--spacing-lg);
+}
+
+.bulk-preview {
+    background: var(--background-light);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-lg);
+    margin-top: var(--spacing-md);
+}
+
+.bulk-output {
+    background: var(--background-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-lg);
+    margin-top: var(--spacing-md);
+}
+
+.usage-content h3 {
+    color: var(--primary-color);
+    margin-bottom: var(--spacing-lg);
+    font-size: var(--font-size-lg);
+}
+
+.usage-content ol {
+    padding-left: var(--spacing-xl);
+    line-height: 1.8;
+}
+
+.usage-content li {
+    margin-bottom: 10px;
 }
 
 /* モーダル（辞書表示用） */
@@ -3218,15 +3493,6 @@ button:disabled {
     font-family: monospace;
     color: var(--text-secondary);
     font-size: 0.9em;
-}
-
-.btn-warning {
-    background-color: var(--warning-color);
-    color: var(--text-primary);
-}
-
-.btn-warning:hover {
-    background-color: var(--warning-hover);
 }
 
 /* 辞書管理モーダルのスタイル */

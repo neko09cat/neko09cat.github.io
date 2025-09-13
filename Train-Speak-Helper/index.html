@@ -83,6 +83,7 @@
         font-size: 12px;
         border: none;
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        display: none;
     " onclick="showDebug()">
         🔍 デバッグ表示
     </div>
@@ -90,8 +91,8 @@
     <!-- 読み込み状況の詳細表示 -->
     <div id="load-status" style="
         position: fixed;
-        top: 50px;
-        left: 10px;
+        top: 10px;
+        right: 10px;
         z-index: 10000;
         background: rgba(33, 150, 243, 0.9);
         color: white;
@@ -308,111 +309,113 @@
                 </div>
             </div>
 
-            <!-- 補助機能 -->
-            <details class="advanced-features">
-                <summary>🔧 高度な機能・便利ツール</summary>
+            <!-- 高度な機能・便利ツール -->
+            <details class="card m-lg" style="margin-top: var(--spacing-xl);">
+                <summary class="card-header">🔧 高度な機能・便利ツール</summary>
+                <div class="card-content">
 
-                <!-- カスタム辞書管理 -->
-                <div class="sub-section">
-                    <h4>📖 カスタム辞書管理</h4>
-                    <p class="small-info">AI ID生成機能に新しい単語を追加して、より多様なテキストに対応できます。</p>
+                    <!-- カスタム辞書管理 -->
+                    <div class="sub-section">
+                        <h4>📖 カスタム辞書管理</h4>
+                        <p class="small-info">AI ID生成機能に新しい単語を追加して、より多様なテキストに対応できます。</p>
 
-                    <div class="custom-dict-input">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="custom-word">単語:</label>
-                                <input type="text" id="custom-word" placeholder="例: 渋谷">
+                        <div class="custom-dict-input">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="custom-word">単語:</label>
+                                    <input type="text" id="custom-word" placeholder="例: 渋谷">
+                                </div>
+                                <div class="form-group">
+                                    <label for="custom-reading">読み:</label>
+                                    <input type="text" id="custom-reading" placeholder="例: しぶや">
+                                </div>
+                                <div class="form-group">
+                                    <label for="custom-romaji">ローマ字:</label>
+                                    <input type="text" id="custom-romaji" placeholder="例: shibuya">
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="custom-reading">読み:</label>
-                                <input type="text" id="custom-reading" placeholder="例: しぶや">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="custom-type">品詞:</label>
+                                    <select id="custom-type">
+                                        <option value="地名">地名</option>
+                                        <option value="列車種別">列車種別</option>
+                                        <option value="副詞">副詞</option>
+                                        <option value="名詞">名詞</option>
+                                        <option value="動詞">動詞</option>
+                                        <option value="連体詞">連体詞</option>
+                                        <option value="接尾辞">接尾辞</option>
+                                        <option value="助詞">助詞</option>
+                                        <option value="語尾">語尾</option>
+                                        <option value="数詞">数詞</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="custom-short">短縮ID:</label>
+                                    <input type="text" id="custom-short" placeholder="例: shibuya（省略可）">
+                                </div>
                             </div>
+                            <div class="custom-dict-buttons">
+                                <button onclick="addCustomDictEntry()" class="btn btn-success">辞書に追加</button>
+                                <button onclick="showCustomDictManager()" class="btn btn-info">辞書管理</button>
+                                <button onclick="importDictFile()" class="btn">📂 辞書ファイル読み込み</button>
+                                <button onclick="exportDictFile()" class="btn">💾 辞書ファイル出力</button>
+                            </div>
+                            <input type="file" id="dict-file-input" accept=".json" style="display: none;"
+                                onchange="handleDictFileImport(event)">
+                        </div>
+
+                        <!-- パターン生成機能 -->
+                        <div class="pattern-generation">
+                            <h5>📝 パターン生成機能</h5>
+                            <p class="small-info">「<駅名>行」「<駅名>と」などのパターンを自動生成します。</p>
+
                             <div class="form-group">
-                                <label for="custom-romaji">ローマ字:</label>
-                                <input type="text" id="custom-romaji" placeholder="例: shibuya">
+                                <label for="pattern-template">パターンテンプレート:</label>
+                                <input type="text" id="pattern-template" placeholder="例: <駅名>行き, <駅名>と<駅名>, <列車種別>電車">
+                                <small class="form-help">「&lt;品詞&gt;」で置換可能なパターンを指定してください。</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="pattern-count">生成数:</label>
+                                <input type="number" id="pattern-count" value="5" min="1" max="20">
+                            </div>
+
+                            <button onclick="generatePatterns()" class="btn btn-primary">パターンを生成</button>
+
+                            <div id="pattern-results" class="pattern-results" style="display: none;">
+                                <h6>生成結果:</h6>
+                                <div id="pattern-list"></div>
                             </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="custom-type">品詞:</label>
-                                <select id="custom-type">
-                                    <option value="地名">地名</option>
-                                    <option value="列車種別">列車種別</option>
-                                    <option value="副詞">副詞</option>
-                                    <option value="名詞">名詞</option>
-                                    <option value="動詞">動詞</option>
-                                    <option value="連体詞">連体詞</option>
-                                    <option value="接尾辞">接尾辞</option>
-                                    <option value="助詞">助詞</option>
-                                    <option value="語尾">語尾</option>
-                                    <option value="数詞">数詞</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="custom-short">短縮ID:</label>
-                                <input type="text" id="custom-short" placeholder="例: shibuya（省略可）">
-                            </div>
-                        </div>
-                        <div class="custom-dict-buttons">
-                            <button onclick="addCustomDictEntry()" class="btn btn-success">辞書に追加</button>
-                            <button onclick="showCustomDictManager()" class="btn btn-info">辞書管理</button>
-                            <button onclick="importDictFile()" class="btn">📂 辞書ファイル読み込み</button>
-                            <button onclick="exportDictFile()" class="btn">💾 辞書ファイル出力</button>
-                        </div>
-                        <input type="file" id="dict-file-input" accept=".json" style="display: none;"
-                            onchange="handleDictFileImport(event)">
                     </div>
 
-                    <!-- パターン生成機能 -->
-                    <div class="pattern-generation">
-                        <h5>📝 パターン生成機能</h5>
-                        <p class="small-info">「<駅名>行」「<駅名>と」などのパターンを自動生成します。</p>
+                    <!-- 音声ファイル一括登録 -->
+                    <div class="sub-section">
+                        <h4>📁 音声ファイル一括登録</h4>
+                        <p class="small-info">複数の音声ファイルを一度に登録できます。</p>
 
                         <div class="form-group">
-                            <label for="pattern-template">パターンテンプレート:</label>
-                            <input type="text" id="pattern-template" placeholder="例: <駅名>行き, <駅名>と<駅名>, <列車種別>電車">
-                            <small class="form-help">「&lt;品詞&gt;」で置換可能なパターンを指定してください。</small>
+                            <label for="bulk-audio-files">音声ファイル（複数選択可）:</label>
+                            <input type="file" id="bulk-audio-files" accept=".wav,.mp3" multiple>
                         </div>
 
                         <div class="form-group">
-                            <label for="pattern-count">生成数:</label>
-                            <input type="number" id="pattern-count" value="5" min="1" max="20">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="auto-generate-id" checked>
+                                <label for="auto-generate-id" class="checkbox-text-label">ファイル名からIDを自動生成</label>
+                            </div>
                         </div>
 
-                        <button onclick="generatePatterns()" class="btn btn-primary">パターンを生成</button>
+                        <button onclick="processBulkAudioFiles()" class="btn btn-primary">一括登録を開始</button>
 
-                        <div id="pattern-results" class="pattern-results" style="display: none;">
-                            <h6>生成結果:</h6>
-                            <div id="pattern-list"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 音声ファイル一括登録 -->
-                <div class="sub-section">
-                    <h4>📁 音声ファイル一括登録</h4>
-                    <p class="small-info">複数の音声ファイルを一度に登録できます。</p>
-
-                    <div class="form-group">
-                        <label for="bulk-audio-files">音声ファイル（複数選択可）:</label>
-                        <input type="file" id="bulk-audio-files" accept=".wav,.mp3" multiple>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="checkbox-wrapper">
-                            <input type="checkbox" id="auto-generate-id" checked>
-                            <label for="auto-generate-id" class="checkbox-text-label">ファイル名からIDを自動生成</label>
-                        </div>
-                    </div>
-
-                    <button onclick="processBulkAudioFiles()" class="btn btn-primary">一括登録を開始</button>
-
-                    <div id="bulk-registration-preview" class="bulk-preview" style="display: none;">
-                        <h4>登録プレビュー</h4>
-                        <div id="bulk-registration-list"></div>
-                        <div class="bulk-actions">
-                            <button onclick="confirmBulkRegistration()" class="btn btn-success">すべて登録</button>
-                            <button onclick="cancelBulkRegistration()" class="btn btn-danger">キャンセル</button>
+                        <div id="bulk-registration-preview" class="bulk-preview" style="display: none;">
+                            <h4>登録プレビュー</h4>
+                            <div id="bulk-registration-list"></div>
+                            <div class="bulk-actions">
+                                <button onclick="confirmBulkRegistration()" class="btn btn-success">すべて登録</button>
+                                <button onclick="cancelBulkRegistration()" class="btn btn-danger">キャンセル</button>
+                            </div>
                         </div>
                     </div>
                 </div>
