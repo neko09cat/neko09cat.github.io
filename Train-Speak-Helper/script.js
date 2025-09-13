@@ -167,6 +167,11 @@ async function initializeMorphologyAnalyzer() {
         // Kuromojiライブラリが読み込まれるまで待機
         await waitForKuromoji();
 
+        // Kuromojiライブラリの最終確認
+        if (typeof kuromoji === 'undefined') {
+            throw new Error('Kuromojiライブラリが読み込まれていません');
+        }
+
         // 辞書パスの設定（GitHub Pages対応）
         const dictPaths = [
             'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict',
@@ -222,34 +227,62 @@ async function waitForKuromoji(maxWait = 15000) {
             return;
         }
 
-        // ライブラリ読み込み完了イベントを監視
-        const handleLibrariesLoaded = (event) => {
-            if (event.detail.kuromoji || typeof kuromoji !== 'undefined') {
-                console.log('✅ Kuromojiライブラリの読み込み確認（イベント経由）');
-                window.removeEventListener('librariesLoaded', handleLibrariesLoaded);
-                resolve();
-            }
+        // 動的にKuromojiライブラリを読み込む
+        console.log('🔄 Kuromojiライブラリを動的に読み込み中...');
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js';
+        script.crossOrigin = 'anonymous';
+        script.referrerPolicy = 'no-referrer';
+
+        script.onload = function () {
+            console.log('✅ Kuromojiライブラリが動的に読み込まれました');
+            resolve();
         };
 
-        window.addEventListener('librariesLoaded', handleLibrariesLoaded);
+        script.onerror = function () {
+            console.error('❌ Kuromojiライブラリの動的読み込みに失敗しました');
+            // フォールバック: ポーリングで再確認
+            startPolling();
+        };
 
-        // タイムアウト監視も並行して実行
-        const timeoutCheck = setInterval(() => {
-            if (typeof kuromoji !== 'undefined') {
-                console.log('✅ Kuromojiライブラリの読み込み確認（ポーリング）');
-                clearInterval(timeoutCheck);
-                window.removeEventListener('librariesLoaded', handleLibrariesLoaded);
-                resolve();
-                return;
-            }
+        // 既にscriptタグが存在しない場合のみ追加
+        if (!document.querySelector('script[src*="kuromoji"]')) {
+            document.head.appendChild(script);
+        } else {
+            startPolling();
+        }
 
-            if (Date.now() - startTime > maxWait) {
-                clearInterval(timeoutCheck);
-                window.removeEventListener('librariesLoaded', handleLibrariesLoaded);
-                console.warn('⚠️ Kuromojiライブラリの読み込みがタイムアウトしました');
-                reject(new Error('Kuromojiライブラリの読み込みがタイムアウトしました'));
-            }
-        }, 100);
+        // ポーリング開始関数
+        function startPolling() {
+            // ライブラリ読み込み完了イベントを監視
+            const handleLibrariesLoaded = (event) => {
+                if (event.detail.kuromoji || typeof kuromoji !== 'undefined') {
+                    console.log('✅ Kuromojiライブラリの読み込み確認（イベント経由）');
+                    window.removeEventListener('librariesLoaded', handleLibrariesLoaded);
+                    resolve();
+                }
+            };
+
+            window.addEventListener('librariesLoaded', handleLibrariesLoaded);
+
+            // タイムアウト監視も並行して実行
+            const timeoutCheck = setInterval(() => {
+                if (typeof kuromoji !== 'undefined') {
+                    console.log('✅ Kuromojiライブラリの読み込み確認（ポーリング）');
+                    clearInterval(timeoutCheck);
+                    window.removeEventListener('librariesLoaded', handleLibrariesLoaded);
+                    resolve();
+                    return;
+                }
+
+                if (Date.now() - startTime > maxWait) {
+                    clearInterval(timeoutCheck);
+                    window.removeEventListener('librariesLoaded', handleLibrariesLoaded);
+                    console.warn('⚠️ Kuromojiライブラリの読み込みがタイムアウトしました');
+                    reject(new Error('Kuromojiライブラリの読み込みがタイムアウトしました'));
+                }
+            }, 100);
+        }
     });
 }
 
@@ -524,6 +557,12 @@ function stopPerformanceMonitoring() {
 // 初期化（ライブラリ読み込み待機版）
 document.addEventListener('DOMContentLoaded', async function () {
     console.log('🚀 アプリケーション初期化開始');
+
+    // JSZipライブラリの読み込み確認
+    console.log('JSZip読み込み状況:', typeof JSZip !== 'undefined' ? '✅ 読み込み済み' : '❌ 未読み込み');
+
+    // Kuromojiライブラリの読み込み確認
+    console.log('Kuromoji読み込み状況:', typeof kuromoji !== 'undefined' ? '✅ 読み込み済み' : '❌ 未読み込み');
 
     // 基本的な初期化（Kuromojiを使わないもの）
     initializeCustomDict();
@@ -2124,9 +2163,28 @@ async function downloadZip() {
         return;
     }
 
-    // JSZipライブラリの使用（CDNから読み込み）
+    // JSZipライブラリの読み込み確認を強化
     if (typeof JSZip === 'undefined') {
-        alert('JSZipライブラリが読み込まれていません。インターネット接続を確認してください。');
+        console.error('JSZipライブラリが読み込まれていません');
+
+        // 動的にJSZipライブラリを読み込む
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+        script.integrity = 'sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==';
+        script.crossOrigin = 'anonymous';
+        script.referrerPolicy = 'no-referrer';
+
+        script.onload = function () {
+            console.log('JSZipライブラリが動的に読み込まれました');
+            // 再帰的に関数を呼び出し
+            exportConfiguration();
+        };
+
+        script.onerror = function () {
+            alert('JSZipライブラリの読み込みに失敗しました。インターネット接続を確認してください。');
+        };
+
+        document.head.appendChild(script);
         return;
     }
 
@@ -3303,6 +3361,13 @@ async function importZipFile() {
 
     if (!file.name.toLowerCase().endsWith('.zip')) {
         alert('Zipファイルを選択してください。');
+        return;
+    }
+
+    // JSZipライブラリの読み込み確認
+    if (typeof JSZip === 'undefined') {
+        console.error('JSZipライブラリが読み込まれていません');
+        alert('JSZipライブラリが読み込まれていません。ページを再読み込みしてください。');
         return;
     }
 

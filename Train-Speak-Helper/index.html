@@ -37,6 +37,15 @@
     <link rel="preload" href="styles.css" as="style">
     <link rel="preload" href="script.js" as="script">
     <link rel="stylesheet" href="styles.css">
+
+    <!-- JSZipライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+        integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!-- Kuromojiライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js" crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
 </head>
 
 <body>
@@ -1117,6 +1126,14 @@
                 .then(() => {
                     console.log('✅ script.js 読み込み完了');
                     document.getElementById('load-status').textContent = '✅ JavaScript読み込み完了';
+
+                    // ライブラリ読み込み完了イベントを発火
+                    window.dispatchEvent(new CustomEvent('librariesLoaded', {
+                        detail: {
+                            kuromoji: typeof kuromoji !== 'undefined',
+                            jszip: typeof JSZip !== 'undefined'
+                        }
+                    }));
                 })
                 .catch(error => {
                     console.error('❌ script.js 読み込み失敗:', error);
