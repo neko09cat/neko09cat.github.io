@@ -2,27 +2,108 @@
 <html lang="ja_JP">
 
 <head>
-    <!-- メタタグ最適化 -->
+    <!-- キャッシュ制御を追加 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta http-equiv="Surrogate-Control" content="no-store">
+
+    <!-- GitHub Pages CDN バイパス -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+
+    <!-- リロード時の強制更新 -->
+    <script>
+        // GitHub Pages での強制更新
+        if (performance.navigation.type === 1) { // リロード検出
+            const timestamp = Date.now();
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('_t', timestamp);
+
+            if (currentUrl.toString() !== window.location.toString()) {
+                window.location.replace(currentUrl.toString());
+            }
+        }
+    </script>
+
+    <!-- 既存のメタタグ -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- パフォーマンス改善 -->
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="theme-color" content="#2196F3">
 
-    <!-- プリロード・プリコネクト最適化 -->
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="preconnect" href="https://unpkg.com" crossorigin>
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-
-    <!-- CSS最適化 -->
-    <link rel="stylesheet" href="styles.css">
-    <link rel="preload" href="styles.css" as="style">
-
     <title>車内自動放送プレイヤー構成ヘルパー</title>
+
+    <!-- リソースの優先読み込み -->
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="preload" href="script.js" as="script">
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+    <!-- 読み込み状態の可視化 -->
+    <div id="loading-indicator" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, #2196F3, #21CBF3);
+        z-index: 10001;
+        animation: loading-pulse 1.5s ease-in-out infinite;
+    "></div>
+
+    <style>
+        @keyframes loading-pulse {
+
+            0%,
+            100% {
+                opacity: 0.6;
+                transform: scaleX(0.8);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scaleX(1);
+            }
+        }
+    </style>
+
+    <!-- 緊急デバッグボタン -->
+    <div id="emergency-debug" style="
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 10000;
+        background: #f44336;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    " onclick="showDebug()">
+        🔍 デバッグ表示
+    </div>
+
+    <!-- 読み込み状況の詳細表示 -->
+    <div id="load-status" style="
+        position: fixed;
+        top: 50px;
+        left: 10px;
+        z-index: 10000;
+        background: rgba(33, 150, 243, 0.9);
+        color: white;
+        padding: 8px;
+        border-radius: 4px;
+        font-family: Arial, sans-serif;
+        font-size: 11px;
+        max-width: 300px;
+    ">
+        📄 index.html 読み込み中...
+    </div>
+
     <!-- デバイス設定パネル（最上位レイヤー） -->
     <div id="device-settings-panel" class="panel panel-overlay" style="display: none;">
         <div class="card">
@@ -890,138 +971,155 @@
         </div>
     </div>
 
-    <!-- 最適化されたライブラリ読み込み -->
+    <!-- 読み込み状況監視スクリプト -->
     <script>
-        // パフォーマンス監視
-        const perfObserver = new PerformanceObserver((list) => {
-            const entries = list.getEntries();
-            entries.forEach(entry => {
-                if (entry.duration > 50) {
-                    console.warn('⚠️ 重い処理を検出:', entry.name, entry.duration + 'ms');
+        (function () {
+            const loadStatus = document.getElementById('load-status');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const startTime = performance.now();
+
+            // 読み込み状況を段階的に更新
+            const updateStatus = (message, color = '#2196F3') => {
+                if (loadStatus) {
+                    loadStatus.textContent = message;
+                    loadStatus.style.background = `rgba(${color === '#2196F3' ? '33, 150, 243' : color === '#4CAF50' ? '76, 175, 80' : '244, 67, 54'}, 0.9)`;
                 }
-            });
-        });
+            };
 
-        if ('observe' in perfObserver) {
-            perfObserver.observe({ entryTypes: ['measure', 'navigation'] });
-        }
+            // DOMContentLoaded イベント
+            document.addEventListener('DOMContentLoaded', () => {
+                const domTime = performance.now() - startTime;
+                updateStatus(`📄 DOM読み込み完了 (${domTime.toFixed(1)}ms)`, '#4CAF50');
 
-        // ライブラリの効率的読み込み
-        const LibraryLoader = {
-            loaded: new Set(),
-            loading: new Set(),
-
-            async loadScript(src, name, retries = 2) {
-                if (this.loaded.has(name)) return Promise.resolve();
-
-                for (let i = 0; i <= retries; i++) {
-                    try {
-                        await this._loadSingleScript(src, name);
-                        return;
-                    } catch (error) {
-                        if (i === retries) throw error;
-                        console.warn(`⚠️ ${name} 読み込み失敗、再試行中... (${i + 1}/${retries + 1})`);
-                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-                    }
-                }
-            },
-
-            _loadSingleScript(src, name) {
-                return new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = src;
-                    script.async = true;
-                    script.crossOrigin = 'anonymous';
-
-                    const timeout = setTimeout(() => {
-                        reject(new Error(`${name} loading timeout`));
-                    }, 10000); // 10秒タイムアウト
-
-                    script.onload = () => {
-                        clearTimeout(timeout);
-                        this.loaded.add(name);
-                        console.log(`✅ ${name} 読み込み完了`);
-                        resolve();
-                    };
-
-                    script.onerror = () => {
-                        clearTimeout(timeout);
-                        reject(new Error(`${name} loading failed`));
-                    };
-
-                    document.head.appendChild(script);
-                });
-            }
-        };
-
-        // 最適化されたライブラリ読み込み
-        async function loadLibrariesOptimized() {
-            try {
-                console.log('📚 ライブラリ読み込み開始');
-
-                // 必須ライブラリのみ先行読み込み
-                const cdnUrls = {
-                    jszip: [
-                        'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-                        'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'
-                    ],
-                    kuromoji: [
-                        'https://unpkg.com/kuromoji@0.1.2/build/kuromoji.js',
-                        'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js'
-                    ]
-                };
-
-                // JSZip優先読み込み
-                let jszipLoaded = false;
-                for (const url of cdnUrls.jszip) {
-                    try {
-                        await LibraryLoader.loadScript(url, 'JSZip');
-                        jszipLoaded = true;
-                        break;
-                    } catch (error) {
-                        console.warn('JSZip CDN失敗:', url);
-                    }
-                }
-
-                if (!jszipLoaded) {
-                    throw new Error('JSZip読み込み完全失敗');
-                }
-
-                // Kuromojiは非同期で読み込み（エラーでも継続）
-                setTimeout(async () => {
-                    for (const url of cdnUrls.kuromoji) {
-                        try {
-                            await LibraryLoader.loadScript(url, 'Kuromoji');
-                            break;
-                        } catch (error) {
-                            console.warn('Kuromoji CDN失敗:', url);
-                        }
-                    }
+                setTimeout(() => {
+                    updateStatus('🎨 CSS適用中...', '#2196F3');
                 }, 100);
+            });
 
-                console.log('✅ 必須ライブラリ読み込み完了');
+            // 完全読み込み完了
+            window.addEventListener('load', () => {
+                const totalTime = performance.now() - startTime;
+                updateStatus(`✅ 完全読み込み完了 (${totalTime.toFixed(1)}ms)`, '#4CAF50');
 
-            } catch (error) {
-                console.error('❌ ライブラリ読み込みエラー:', error);
-            }
-        }
+                // 3秒後にインジケーターを非表示
+                setTimeout(() => {
+                    if (loadingIndicator) loadingIndicator.style.display = 'none';
+                    if (loadStatus) loadStatus.style.opacity = '0.3';
+                }, 3000);
 
-        // 段階的読み込み開始
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadLibrariesOptimized);
-        } else {
-            loadLibrariesOptimized();
+                // 5秒後に完全に非表示
+                setTimeout(() => {
+                    if (loadStatus) loadStatus.style.display = 'none';
+                }, 5000);
+            });
+
+            // リソース読み込みエラーの監視
+            window.addEventListener('error', (e) => {
+                updateStatus(`❌ 読み込みエラー: ${e.filename}`, '#F44336');
+            });
+
+            // GitHub Pages 特有の問題を検出
+            setTimeout(() => {
+                if (document.readyState !== 'complete') {
+                    updateStatus('⚠️ 読み込みが遅延しています...', '#FF9800');
+                }
+            }, 5000);
+
+            // 10秒経過しても完了しない場合
+            setTimeout(() => {
+                if (document.readyState !== 'complete') {
+                    updateStatus('🚨 読み込みタイムアウトの可能性', '#F44336');
+
+                    // Service Worker をリセット
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(registrations => {
+                            registrations.forEach(registration => {
+                                registration.unregister();
+                                updateStatus('🔄 Service Worker をリセットしました', '#FF9800');
+                            });
+                        });
+                    }
+                }
+            }, 10000);
+        })();
+    </script>
+
+    <!-- Service Worker の条件付き読み込み -->
+    <script>
+        // Service Worker の安全な登録
+        if ('serviceWorker' in navigator && location.protocol === 'https:') {
+            // 遅延登録でメインスレッドをブロックしない
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    navigator.serviceWorker.register('sw.js', {
+                        scope: '/Train-Speak-Helper/'
+                    })
+                        .then(registration => {
+                            console.log('✅ SW登録成功:', registration);
+
+                            // 更新チェック
+                            registration.addEventListener('updatefound', () => {
+                                const newWorker = registration.installing;
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed') {
+                                        if (navigator.serviceWorker.controller) {
+                                            // 新しいバージョンがある場合
+                                            if (confirm('新しいバージョンがあります。更新しますか？')) {
+                                                window.location.reload();
+                                            }
+                                        }
+                                    }
+                                });
+                            });
+                        })
+                        .catch(error => {
+                            console.warn('⚠️ SW登録失敗:', error);
+                            document.getElementById('load-status').textContent = '⚠️ SW登録失敗（通常動作継続）';
+                        });
+                }, 2000); // 2秒遅延
+            });
         }
     </script>
 
-    <!-- メインスクリプト -->
-    <script src="script.js" defer></script>
-
-    <!-- Service Worker -->
+    <!-- メインスクリプトの安全な読み込み -->
     <script>
-        if ('serviceWorker' in navigator && location.protocol === 'https:') {
-            navigator.serviceWorker.register('sw.js').catch(console.warn);
+        // タイムアウト付きスクリプト読み込み
+        function loadScriptSafely(src, timeout = 10000) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+
+                const timer = setTimeout(() => {
+                    reject(new Error(`Script loading timeout: ${src}`));
+                }, timeout);
+
+                script.onload = () => {
+                    clearTimeout(timer);
+                    resolve();
+                };
+
+                script.onerror = () => {
+                    clearTimeout(timer);
+                    reject(new Error(`Script loading failed: ${src}`));
+                };
+
+                document.head.appendChild(script);
+            });
         }
+
+        // メインスクリプトを安全に読み込み
+        document.addEventListener('DOMContentLoaded', () => {
+            loadScriptSafely('script.js')
+                .then(() => {
+                    console.log('✅ script.js 読み込み完了');
+                    document.getElementById('load-status').textContent = '✅ JavaScript読み込み完了';
+                })
+                .catch(error => {
+                    console.error('❌ script.js 読み込み失敗:', error);
+                    document.getElementById('load-status').textContent = '❌ JavaScript読み込み失敗';
+                });
+        });
     </script>
 </body>
 

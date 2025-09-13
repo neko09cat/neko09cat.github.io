@@ -41,44 +41,36 @@ self.addEventListener('activate', event => {
     );
 });
 
-// 効率的なフェッチ処理
+// 問題のあるキャッシュ処理を修正
 self.addEventListener('fetch', event => {
     const { request } = event;
-    const { url, method } = request;
 
-    // GET リクエストのみキャッシュ
-    if (method !== 'GET') return;
-
-    // 外部リソースは直接フェッチ
-    if (!url.includes(self.location.origin)) {
-        return fetch(request);
+    // index.htmlの処理を最適化
+    if (request.url.includes('index.html') || request.url.endsWith('/')) {
+        event.respondWith(
+            // ネットワークファーストで最新版を優先
+            fetch(request)
+                .then(response => {
+                    // 成功時のみキャッシュ更新
+                    if (response.ok) {
+                        const responseClone = response.clone();
+                        caches.open(CACHE_NAME)
+                            .then(cache => cache.put(request, responseClone))
+                            .catch(console.warn);
+                    }
+                    return response;
+                })
+                .catch(() => {
+                    // ネットワークエラー時のみキャッシュから取得
+                    return caches.match(request);
+                })
+        );
+        return;
     }
 
+    // その他のリソースは通常のキャッシュファースト
     event.respondWith(
         caches.match(request)
-            .then(response => {
-                if (response) {
-                    return response;
-                }
-
-                return fetch(request)
-                    .then(response => {
-                        // レスポンスをクローンしてキャッシュ
-                        if (response.status === 200) {
-                            const responseClone = response.clone();
-                            caches.open(DYNAMIC_CACHE)
-                                .then(cache => cache.put(request, responseClone))
-                                .catch(console.warn);
-                        }
-
-                        return response;
-                    });
-            })
-            .catch(() => {
-                // オフライン時のフォールバック
-                if (request.destination === 'document') {
-                    return caches.match('/Train-Speak-Helper/index.html');
-                }
-            })
+            .then(response => response || fetch(request))
     );
 });

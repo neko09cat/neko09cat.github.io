@@ -2899,8 +2899,8 @@ async function suggestIdFromText() {
                         }
                     } else if (word.romaji && word.type !== '未知語') {
                         let cleanRomaji = word.romaji
-                            .replace(/uu/g, 'u')
-                            .replace(/ou/g, 'o')
+                            .replace(/uu/g, 'u')  // 長音を短縮
+                            .replace(/ou/g, 'o')  // 長音を短縮
                             .replace(/-/g, '')
                             .replace(/[^a-zA-Z0-9]/g, ''); // 非ASCII文字を除去
                         if (cleanRomaji) {
@@ -3158,7 +3158,7 @@ async function processBulkAudioFiles() {
         const partData = {
             id: id,
             text: text,
-            audio: filename,
+            audio: audioFileName,
             file: file,
             reading: reading,
             analysisUsed: autoGenerateId && morphologyTokenizer ? 'kuromoji' : autoGenerateId ? 'dictionary' : 'none'
@@ -4387,808 +4387,128 @@ function usePattern(text, id) {
     hideMessagesAfterDelay('parts-messages');
 }
 
-// デバイス設定検出・適用システム
-function initializeDeviceSettings() {
-    console.log('🔧 デバイス設定を初期化中...');
-
-    // 保存された自動適用設定を読み込み
-    const autoApply = localStorage.getItem('deviceAutoApply');
-    AppState.device.autoApply = autoApply !== null ? autoApply === 'true' : true;
-
-    // デバイス設定を検出
-    detectDeviceSettings();
-
-    // 自動適用が有効な場合、設定を適用
-    if (AppState.device.autoApply) {
-        applyDeviceSettings();
+// Service Worker 管理クラスを追加
+class ServiceWorkerManager {
+    constructor() {
+        this.isAvailable = 'serviceWorker' in navigator;
+        this.registrations = [];
     }
 
-    // 設定変更の監視を開始
-    startDeviceSettingsMonitoring();
+    async checkStatus() {
+        if (!this.isAvailable) return 'not_supported';
 
-    // イベントリスナーを設定
-    setupDeviceSettingsEventListeners();
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            this.registrations = registrations;
 
-    console.log('✅ デバイス設定初期化完了:', AppState.device);
-}
-
-function setupDeviceSettingsEventListeners() {
-    console.log('🎯 デバイス設定イベントリスナーを設定中...');
-
-    try {
-        // 自動適用切り替えチェックボックス
-        const autoApplyToggle = document.getElementById('auto-apply-toggle');
-        if (autoApplyToggle) {
-            autoApplyToggle.addEventListener('change', function (event) {
-                try {
-                    toggleDeviceAutoApply();
-                } catch (error) {
-                    console.error('自動適用切り替えエラー:', error);
-                    showMessage('parts-messages', 'error', 'デバイス設定の切り替えでエラーが発生しました');
-                }
-            });
-            autoApplyToggle.checked = AppState.device.autoApply;
-            console.log('✅ 自動適用チェックボックス設定完了');
-        } else {
-            console.warn('⚠️ auto-apply-toggle要素が見つかりません');
-        }
-
-        // タッチ無効化切り替えチェックボックス
-        const forceDisableTouchToggle = document.getElementById('force-disable-touch');
-        if (forceDisableTouchToggle) {
-            forceDisableTouchToggle.addEventListener('change', function (event) {
-                try {
-                    toggleTouchOptimization();
-                } catch (error) {
-                    console.error('タッチ最適化切り替えエラー:', error);
-                    showMessage('parts-messages', 'error', 'タッチ設定の切り替えでエラーが発生しました');
-                }
-            });
-
-            // 保存されたタッチ無効化設定を反映
-            const forceDisableTouch = localStorage.getItem('forceDisableTouch');
-            if (forceDisableTouch === 'true') {
-                forceDisableTouchToggle.checked = true;
+            if (registrations.length === 0) {
+                return 'not_registered';
             }
-            console.log('✅ タッチ無効化チェックボックス設定完了');
-        } else {
-            console.warn('⚠️ force-disable-touch要素が見つかりません');
+
+            const activeWorker = registrations.find(reg => reg.active);
+            if (!activeWorker) {
+                return 'not_active';
+            }
+
+            return 'active';
+        } catch (error) {
+            console.error('SW status check failed:', error);
+            return 'error';
         }
-
-        console.log('✅ デバイス設定イベントリスナー設定完了');
-    } catch (error) {
-        console.error('❌ デバイス設定イベントリスナー設定エラー:', error);
-    }
-}
-
-function detectDeviceSettings() {
-    // カラースキーム検出
-    AppState.device.colorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-
-    // アニメーション減少設定
-    AppState.device.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    // ハイコントラスト設定
-    AppState.device.highContrast = window.matchMedia('(prefers-contrast: high)').matches;
-
-    // 強制色設定
-    AppState.device.forcedColors = window.matchMedia('(forced-colors: active)').matches;
-
-    // モバイル固定設定（チェックボックスなどのUI要素をモバイル統一）
-    AppState.device.touchDevice = true; // 完全モバイル固定（デバイス検出無し）
-
-    // bodyクラス設定
-    document.body.classList.add('touch-device');
-
-    // 画面サイズ検出
-    const width = window.innerWidth;
-    if (width < 768) {
-        AppState.device.screenSize = 'mobile';
-    } else if (width < 1024) {
-        AppState.device.screenSize = 'tablet';
-    } else {
-        AppState.device.screenSize = 'desktop';
     }
 
-    // デバイスピクセル比
-    AppState.device.pixelRatio = window.devicePixelRatio || 1;
+    async reset() {
+        if (!this.isAvailable) return false;
 
-    // ネットワーク接続情報（対応ブラウザのみ）
-    if ('connection' in navigator) {
-        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-        AppState.device.connection = connection ? connection.effectiveType || 'unknown' : 'unknown';
-    }
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
 
-    // 言語設定
-    AppState.device.language = navigator.language || navigator.userLanguage || 'ja';
+            for (const registration of registrations) {
+                await registration.unregister();
+                console.log('🔄 Service Worker unregistered:', registration.scope);
+            }
 
-    // タイムゾーン
-    AppState.device.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
-
-    console.log('📱 デバイス設定検出完了:', AppState.device);
-}
-
-function detectTouchDevice() {
-    // モバイルファーストUI - 全デバイス統一でタッチデバイス扱い
-    console.log('📱 モバイルファーストUI: 全デバイスでタッチデバイス設定');
-    return true;
-}
-
-function applyDeviceSettings() {
-    console.log('⚙️ デバイス設定を適用中...');
-
-    // テーマの自動適用
-    if (!localStorage.getItem('theme')) {
-        AppState.ui.theme = AppState.device.colorScheme;
-        applyTheme(AppState.ui.theme);
-        updateThemeToggleButton();
-    }
-
-    // アニメーション設定の適用
-    applyMotionSettings();
-
-    // コントラスト設定の適用
-    applyContrastSettings();
-
-    // タッチデバイス最適化
-    applyTouchOptimizations();
-
-    // 画面サイズ最適化
-    applyScreenSizeOptimizations();
-
-    // ネットワーク最適化
-    applyNetworkOptimizations();
-
-    // 言語設定の適用
-    applyLanguageSettings();
-
-    console.log('✅ デバイス設定適用完了');
-}
-
-function applyMotionSettings() {
-    const body = document.body;
-
-    if (AppState.device.reducedMotion) {
-        body.classList.add('reduced-motion');
-        console.log('🎭 アニメーション減少モードを適用');
-    } else {
-        body.classList.remove('reduced-motion');
-    }
-}
-
-function applyContrastSettings() {
-    const body = document.body;
-
-    if (AppState.device.highContrast) {
-        body.classList.add('high-contrast');
-        console.log('🔆 ハイコントラストモードを適用');
-    } else {
-        body.classList.remove('high-contrast');
-    }
-
-    if (AppState.device.forcedColors) {
-        body.classList.add('forced-colors');
-        console.log('🎨 強制色モードを適用');
-    } else {
-        body.classList.remove('forced-colors');
-    }
-}
-
-function applyTouchOptimizations() {
-    const body = document.body;
-
-    if (AppState.device.touchDevice) {
-        body.classList.add('touch-device');
-        console.log('👆 タッチデバイス最適化を適用');
-
-        // タッチ用のボタンサイズ調整
-        document.documentElement.style.setProperty('--touch-target-size', '44px');
-    } else {
-        body.classList.remove('touch-device');
-        document.documentElement.style.setProperty('--touch-target-size', '32px');
-    }
-}
-
-function applyScreenSizeOptimizations() {
-    const body = document.body;
-
-    // 既存のクラスをクリア
-    body.classList.remove('mobile-device', 'tablet-device', 'desktop-device');
-
-    // 新しいクラスを追加
-    body.classList.add(`${AppState.device.screenSize}-device`);
-
-    console.log(`📱 ${AppState.device.screenSize}最適化を適用`);
-}
-
-function applyNetworkOptimizations() {
-    const body = document.body;
-
-    if (AppState.device.connection === 'slow-2g' || AppState.device.connection === '2g') {
-        body.classList.add('slow-network');
-        console.log('🐌 低速ネットワーク最適化を適用');
-    } else {
-        body.classList.remove('slow-network');
-    }
-}
-
-function applyLanguageSettings() {
-    // HTML要素のlang属性を設定
-    document.documentElement.lang = AppState.device.language.split('-')[0];
-
-    // 日本語以外の場合の最適化（将来の国際化対応）
-    if (!AppState.device.language.startsWith('ja')) {
-        document.body.classList.add('non-japanese');
-        console.log(`🌐 言語設定を適用: ${AppState.device.language}`);
-    }
-}
-
-function startDeviceSettingsMonitoring() {
-    console.log('👁️ デバイス設定監視を開始');
-
-    // カラースキーム変更の監視
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        AppState.device.colorScheme = e.matches ? 'dark' : 'light';
-        console.log(`🎨 カラースキーム変更検出: ${AppState.device.colorScheme}`);
-
-        if (AppState.device.autoApply && !localStorage.getItem('theme')) {
-            AppState.ui.theme = AppState.device.colorScheme;
-            applyTheme(AppState.ui.theme);
-            updateThemeToggleButton();
-        }
-    });
-
-    // アニメーション設定変更の監視
-    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (e) => {
-        AppState.device.reducedMotion = e.matches;
-        console.log(`🎭 アニメーション設定変更検出: ${e.matches ? '減少' : '通常'}`);
-
-        if (AppState.device.autoApply) {
-            applyMotionSettings();
-        }
-    });
-
-    // コントラスト設定変更の監視
-    window.matchMedia('(prefers-contrast: high)').addEventListener('change', (e) => {
-        AppState.device.highContrast = e.matches;
-        console.log(`🔆 コントラスト設定変更検出: ${e.matches ? 'ハイ' : '通常'}`);
-
-        if (AppState.device.autoApply) {
-            applyContrastSettings();
-        }
-    });
-
-    // 画面サイズ変更の監視
-    const resizeObserver = new ResizeObserver(() => {
-        const oldScreenSize = AppState.device.screenSize;
-        detectDeviceSettings();
-
-        if (oldScreenSize !== AppState.device.screenSize && AppState.device.autoApply) {
-            console.log(`📱 画面サイズ変更検出: ${oldScreenSize} → ${AppState.device.screenSize}`);
-            applyScreenSizeOptimizations();
-        }
-    });
-
-    resizeObserver.observe(document.body);
-
-    // ネットワーク接続変更の監視（対応ブラウザのみ）
-    if ('connection' in navigator) {
-        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-        if (connection) {
-            connection.addEventListener('change', () => {
-                const oldConnection = AppState.device.connection;
-                AppState.device.connection = connection.effectiveType || 'unknown';
-
-                if (oldConnection !== AppState.device.connection && AppState.device.autoApply) {
-                    console.log(`📶 ネットワーク接続変更検出: ${oldConnection} → ${AppState.device.connection}`);
-                    applyNetworkOptimizations();
+            // キャッシュもクリア
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                for (const cacheName of cacheNames) {
+                    await caches.delete(cacheName);
+                    console.log('🗑️ Cache deleted:', cacheName);
                 }
+            }
+
+            return true;
+        } catch (error) {
+            console.error('SW reset failed:', error);
+            return false;
+        }
+    }
+
+    async forceReload() {
+        await this.reset();
+
+        // ハードリロードを実行
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+                type: 'SKIP_WAITING'
             });
         }
+
+        // 強制リロード
+        window.location.reload(true);
     }
 }
 
-function toggleDeviceAutoApply() {
-    AppState.device.autoApply = !AppState.device.autoApply;
-    localStorage.setItem('deviceAutoApply', AppState.device.autoApply.toString());
+// グローバルに利用可能にする
+window.swManager = new ServiceWorkerManager();
 
-    console.log(`🔄 デバイス設定自動適用: ${AppState.device.autoApply ? 'ON' : 'OFF'}`);
-
-    if (AppState.device.autoApply) {
-        // 再検出して適用
-        detectDeviceSettings();
-        applyDeviceSettings();
-        showMessage('parts-messages', 'success', 'デバイス設定の自動適用を有効にしました');
+// デバッグ用関数をグローバルに追加
+window.resetServiceWorker = async () => {
+    console.log('🔄 Service Worker をリセット中...');
+    const result = await window.swManager.reset();
+    if (result) {
+        console.log('✅ Service Worker リセット完了');
+        setTimeout(() => window.location.reload(), 1000);
     } else {
-        showMessage('parts-messages', 'info', 'デバイス設定の自動適用を無効にしました');
+        console.error('❌ Service Worker リセット失敗');
     }
+};
 
-    updateDeviceInfoDisplay();
-}
+window.forceReload = async () => {
+    console.log('🔄 強制リロード実行中...');
+    await window.swManager.forceReload();
+};
 
-// グローバルスコープに確実に配置
-window.toggleDeviceAutoApply = toggleDeviceAutoApply;
-
-function toggleTouchOptimization() {
-    const forceDisableTouch = document.getElementById('force-disable-touch').checked;
-    localStorage.setItem('forceDisableTouch', forceDisableTouch.toString());
-
-    console.log(`📱 タッチ最適化強制無効化: ${forceDisableTouch ? 'ON' : 'OFF'}`);
-
-    // タッチデバイス設定を再計算
-    const originalTouchDevice = detectTouchDevice();
-    AppState.device.touchDevice = forceDisableTouch ? false : originalTouchDevice;
-
-    // タッチ最適化を再適用
-    applyTouchOptimizations();
-
-    if (forceDisableTouch) {
-        showMessage('parts-messages', 'success', 'タッチデバイス最適化を強制的に無効化しました');
-    } else {
-        showMessage('parts-messages', 'info', 'タッチデバイス最適化の強制無効化を解除しました');
-    }
-
-    updateDeviceInfoDisplay();
-}
-
-// グローバルスコープに確実に配置
-window.toggleTouchOptimization = toggleTouchOptimization;
-
-// デバイス設定パネル制御
-function toggleDeviceSettingsPanel() {
-    const panel = document.getElementById('device-settings-panel');
-    const button = document.getElementById('device-settings-toggle');
-
-    if (panel.style.display === 'none' || !panel.style.display) {
-        panel.style.display = 'block';
-        button.classList.add('active');
-        updateDeviceInfoDisplay();
-
-        // パネル外クリックで閉じる
-        setTimeout(() => {
-            document.addEventListener('click', handlePanelOutsideClick);
-        }, 100);
-    } else {
-        closeDeviceSettingsPanel();
-    }
-}
-
-function closeDeviceSettingsPanel() {
-    const panel = document.getElementById('device-settings-panel');
-    const button = document.getElementById('device-settings-toggle');
-
-    panel.style.display = 'none';
-    button.classList.remove('active');
-
-    document.removeEventListener('click', handlePanelOutsideClick);
-}
-
-function handlePanelOutsideClick(event) {
-    const panel = document.getElementById('device-settings-panel');
-    const button = document.getElementById('device-settings-toggle');
-
-    if (!panel.contains(event.target) && !button.contains(event.target)) {
-        closeDeviceSettingsPanel();
-    }
-}
-
-function updateDeviceInfoDisplay() {
-    const deviceInfoContainer = document.getElementById('device-info');
-    const autoApplyToggle = document.getElementById('auto-apply-toggle');
-
-    if (!deviceInfoContainer) return;
-
-    // トグルの状態を同期
-    if (autoApplyToggle) {
-        autoApplyToggle.checked = AppState.device.autoApply;
-    }
-
-    // デバイス情報を表示
-    const deviceInfo = [
-        { label: 'カラースキーム', value: AppState.device.colorScheme === 'dark' ? 'ダーク' : 'ライト' },
-        { label: 'アニメーション', value: AppState.device.reducedMotion ? '減少' : '通常' },
-        { label: 'コントラスト', value: AppState.device.highContrast ? 'ハイ' : '通常' },
-        { label: '強制色', value: AppState.device.forcedColors ? '有効' : '無効' },
-        { label: 'デバイス', value: AppState.device.touchDevice ? 'タッチ' : 'デスクトップ' },
-        { label: '画面サイズ', value: AppState.device.screenSize },
-        { label: 'ピクセル比', value: `${AppState.device.pixelRatio}x` },
-        { label: 'ネットワーク', value: AppState.device.connection },
-        { label: '言語', value: AppState.device.language },
-        { label: 'タイムゾーン', value: AppState.device.timezone }
-    ];
-
-    deviceInfoContainer.innerHTML = deviceInfo.map(info => `
-        <div class="device-info-item">
-            <span class="device-info-label">${info.label}:</span>
-            <span class="device-info-value">${info.value}</span>
-        </div>
-    `).join('');
-}
-
-// 既存のテーマ初期化を拡張
-function initializeTheme() {
-    console.log('🎨 テーマ初期化中...');
-
-    // デバイス設定を先に初期化
-    initializeDeviceSettings();
-
-    // デバイス設定のイベントリスナーを遅延設定（DOM要素が確実に存在するため）
-    setTimeout(() => {
-        setupDeviceSettingsEventListeners();
-    }, 100);
-
-    // ローカルストレージからテーマを読み込み
-    const savedTheme = localStorage.getItem('theme');
-
-    if (savedTheme) {
-        // ユーザーが明示的に設定したテーマを使用
-        AppState.ui.theme = savedTheme;
-        console.log(`💾 保存されたテーマを適用: ${savedTheme}`);
-    } else if (AppState.device.autoApply) {
-        // デバイス設定から自動適用
-        AppState.ui.theme = AppState.device.colorScheme;
-        console.log(`📱 デバイス設定からテーマを適用: ${AppState.device.colorScheme}`);
-    } else {
-        // デフォルト
-        AppState.ui.theme = 'light';
-        console.log('🌟 デフォルトテーマを適用: light');
-    }
-
-    applyTheme(AppState.ui.theme);
-    updateThemeToggleButton();
-
-    // システムのテーマ変更を監視（ユーザーが明示的に設定していない場合のみ）
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        if (!localStorage.getItem('theme') && AppState.device.autoApply) {
-            AppState.ui.theme = e.matches ? 'dark' : 'light';
-            applyTheme(AppState.ui.theme);
-            updateThemeToggleButton();
-            console.log(`🔄 システムテーマ変更を検出・適用: ${AppState.ui.theme}`);
-        }
-    });
-} function toggleTheme() {
-    AppState.ui.theme = AppState.ui.theme === 'light' ? 'dark' : 'light';
-    applyTheme(AppState.ui.theme);
-    updateThemeToggleButton();
-
-    // ローカルストレージに保存
-    localStorage.setItem('theme', AppState.ui.theme);
-
-    // アニメーション効果
-    const button = document.getElementById('theme-toggle');
-    button.style.transform = 'scale(0.9)';
-    setTimeout(() => {
-        button.style.transform = 'scale(1)';
-    }, 150);
-}
-
-function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-
-    // パフォーマンス最適化のため、テーマ変更時に再描画を最適化
-    requestAnimationFrame(() => {
-        // テーマ変更のアニメーション
-        document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
-        setTimeout(() => {
-            document.body.style.transition = '';
-        }, 300);
-    });
-}
-
-function updateThemeToggleButton() {
-    const button = document.getElementById('theme-toggle');
-    const icon = button?.querySelector('.theme-icon');
-
-    if (icon) {
-        icon.textContent = AppState.ui.theme === 'dark' ? '☀️' : '🌙';
-        button.title = AppState.ui.theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
-    }
-}
-
-// ページ読み込み時にテーマを初期化
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 アプリケーション初期化開始');
-
-    // テーマとデバイス設定を初期化
-    initializeTheme();
-
-    // デバイス設定パネルの初期状態を設定
-    setTimeout(() => {
-        updateDeviceInfoDisplay();
-    }, 100);
-
-    console.log('✅ アプリケーション初期化完了');
-});
-
-// 1. パフォーマンス最適化：デバウンス機能を追加
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// 2. スロットリング機能を追加
-function throttle(func, limit) {
-    let inThrottle;
-    return function (...args) {
-        if (!inThrottle) {
-            func.apply(this, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    };
-}
-
-// 3. 重い処理を非同期化
-async function processHeavyTask(data, callback) {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            callback(data);
-            resolve();
-        }, 0);
-    });
-}
-
-// 4. IntersectionObserver でパフォーマンス向上
-let observerInstance = null;
-
-function initializeIntersectionObserver() {
-    if (!('IntersectionObserver' in window)) return;
-
-    observerInstance = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                // 表示された要素のみ処理
-                entry.target.classList.add('visible');
-            }
-        });
-    }, {
-        threshold: 0.1,
-        rootMargin: '50px'
-    });
-}
-
-// 5. requestAnimationFrame でアニメーション最適化
-let animationFrameId = null;
-
-function optimizedAnimation(callback) {
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-    }
-
-    animationFrameId = requestAnimationFrame(() => {
-        callback();
-        animationFrameId = null;
-    });
-}
-
-// 6. メモリリークを防ぐイベントリスナー管理
-const eventListeners = new Map();
-
-function addOptimizedEventListener(element, event, handler, options = {}) {
-    const key = `${element}-${event}`;
-
-    // 既存のリスナーを削除
-    if (eventListeners.has(key)) {
-        element.removeEventListener(event, eventListeners.get(key));
-    }
-
-    // 新しいリスナーを追加
-    eventListeners.set(key, handler);
-    element.addEventListener(event, handler, { passive: true, ...options });
-}
-
-// 7. 検索機能の最適化（デバウンス適用）
-const optimizedFilterParts = debounce(function () {
-    const searchTerm = document.getElementById('parts-search')?.value?.toLowerCase() || '';
-    const partsList = document.getElementById('parts-list');
-
-    if (!partsList) return;
-
-    // バッチ処理でDOM操作を最小化
-    const items = partsList.querySelectorAll('.part-item');
-    const fragment = document.createDocumentFragment();
-
-    items.forEach(item => {
-        const shouldShow = !searchTerm ||
-            item.textContent.toLowerCase().includes(searchTerm);
-        item.style.display = shouldShow ? 'block' : 'none';
-    });
-}, 300); // 300ms のデバウンス
-
-// 8. リアルタイム更新の最適化
-const optimizedUpdatePreview = throttle(function () {
-    const id = document.getElementById('part-id')?.value || '';
-    const text = document.getElementById('part-text')?.value || '';
-    const audio = document.getElementById('part-audio')?.files?.[0]?.name || '';
-
-    // DOM操作を最小化
-    requestAnimationFrame(() => {
-        const previewElement = document.getElementById('part-preview');
-        if (previewElement && (id || text || audio)) {
-            document.getElementById('preview-id').textContent = id;
-            document.getElementById('preview-text').textContent = text;
-            document.getElementById('preview-audio').textContent = audio;
-            previewElement.style.display = 'block';
-        }
-    });
-}, 150); // 150ms のスロットリング
-
-// 9. 形態素解析の最適化（Workers使用）
-let morphologyWorker = null;
-
-function initializeMorphologyWorker() {
-    if (typeof Worker === 'undefined') return null;
-
-    try {
-        const workerCode = `
-            self.onmessage = function(e) {
-                try {
-                    // 軽量な処理のみWorkerで実行
-                    const result = processMorphology(e.data);
-                    self.postMessage({ success: true, result });
-                } catch (error) {
-                    self.postMessage({ success: false, error: error.message });
-                }
-            };
-            
-            function processMorphology(text) {
-                // シンプルな処理のみ
-                return text.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            }
+// 既存のVisualDebuggerクラスに追加
+if (window.VisualDebugger) {
+    window.VisualDebugger.prototype.addServiceWorkerControls = function () {
+        const swControls = document.createElement('div');
+        swControls.innerHTML = `
+            <button onclick="resetServiceWorker()" style="
+                background: #FF9800;
+                color: white;
+                border: none;
+                padding: 4px 8px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 10px;
+                margin-right: 5px;
+            ">SW リセット</button>
+            <button onclick="forceReload()" style="
+                background: #F44336;
+                color: white;
+                border: none;
+                padding: 4px 8px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 10px;
+            ">強制リロード</button>
         `;
 
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
-        morphologyWorker = new Worker(URL.createObjectURL(blob));
-
-        return morphologyWorker;
-    } catch (error) {
-        console.warn('⚠️ Web Worker初期化失敗:', error);
-        return null;
-    }
-}
-
-// 10. メモリ使用量の監視
-function monitorMemoryUsage() {
-    if (!performance.memory) return;
-
-    const memoryInfo = performance.memory;
-    const usedPercent = (memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit) * 100;
-
-    if (usedPercent > 80) {
-        console.warn('⚠️ メモリ使用率が高くなっています:', usedPercent.toFixed(1) + '%');
-        // ガベージコレクションを促進
-        if (window.gc) window.gc();
-    }
-}
-
-// 11. CPU使用率の監視と制御
-let cpuMonitorInterval = null;
-let lastFrameTime = performance.now();
-let frameCount = 0;
-
-function startCPUMonitoring() {
-    function checkPerformance() {
-        const now = performance.now();
-        frameCount++;
-
-        if (now - lastFrameTime >= 1000) {
-            const fps = Math.round((frameCount * 1000) / (now - lastFrameTime));
-            frameCount = 0;
-            lastFrameTime = now;
-
-            // FPSが低い場合は処理を軽量化
-            if (fps < 30) {
-                console.warn('⚠️ パフォーマンス低下を検出:', fps + 'fps');
-                enablePerformanceMode();
-            }
+        const header = this.panel.querySelector('#debug-header');
+        if (header) {
+            header.appendChild(swControls);
         }
-
-        requestAnimationFrame(checkPerformance);
-    }
-
-    requestAnimationFrame(checkPerformance);
-
-    // メモリ監視（5秒間隔）
-    cpuMonitorInterval = setInterval(monitorMemoryUsage, 5000);
+    };
 }
-
-function enablePerformanceMode() {
-    console.log('🚀 パフォーマンスモードを有効化');
-
-    // アニメーションを軽量化
-    document.documentElement.style.setProperty('--animation-duration', '0.1s');
-
-    // 重い処理を無効化
-    window.performanceMode = true;
-}
-
-// 12. 初期化処理の最適化
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('🚀 最適化された初期化開始');
-
-    // 段階的初期化でCPU負荷を分散
-    setTimeout(() => {
-        initializeIntersectionObserver();
-    }, 100);
-
-    setTimeout(() => {
-        initializeMorphologyWorker();
-    }, 200);
-
-    setTimeout(() => {
-        startCPUMonitoring();
-    }, 300);
-
-    setTimeout(() => {
-        initializeEventListeners();
-    }, 400);
-
-    console.log('✅ 初期化完了');
-});
-
-// 13. イベントリスナーの最適化
-function initializeEventListeners() {
-    // 検索機能
-    const searchInput = document.getElementById('parts-search');
-    if (searchInput) {
-        addOptimizedEventListener(searchInput, 'input', optimizedFilterParts);
-    }
-
-    // プレビュー更新
-    const partIdInput = document.getElementById('part-id');
-    const partTextInput = document.getElementById('part-text');
-
-    if (partIdInput) {
-        addOptimizedEventListener(partIdInput, 'input', optimizedUpdatePreview);
-    }
-
-    if (partTextInput) {
-        addOptimizedEventListener(partTextInput, 'input', optimizedUpdatePreview);
-    }
-}
-
-// 14. クリーンアップ処理
-window.addEventListener('beforeunload', function () {
-    // メモリリークを防ぐクリーンアップ
-    if (cpuMonitorInterval) {
-        clearInterval(cpuMonitorInterval);
-    }
-
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-    }
-
-    if (morphologyWorker) {
-        morphologyWorker.terminate();
-    }
-
-    if (observerInstance) {
-        observerInstance.disconnect();
-    }
-
-    // イベントリスナーをクリア
-    eventListeners.clear();
-});
-
-// 15. ページ可視性の監視
-document.addEventListener('visibilitychange', function () {
-    if (document.hidden) {
-        // ページが非表示の時は処理を停止
-        console.log('⏸️ ページが非表示：処理を一時停止');
-        if (cpuMonitorInterval) {
-            clearInterval(cpuMonitorInterval);
-        }
-    } else {
-        // ページが再表示された時は処理を再開
-        console.log('▶️ ページが表示：処理を再開');
-        startCPUMonitoring();
-    }
-});
 
