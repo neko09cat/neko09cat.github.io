@@ -586,6 +586,13 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     console.log('✅ 基本初期化完了');
 
+    // デバイス設定の検出と適用
+    detectDeviceSettings();
+    if (AppState.device.autoApply) {
+        applyDeviceSettings();
+    }
+    updateDeviceInfoDisplay();
+
     // マウス操作のためのUI初期化
     initializeMouseOperationUI();
 
@@ -4510,5 +4517,194 @@ if (window.VisualDebugger) {
             header.appendChild(swControls);
         }
     };
+}
+
+// デバイス設定検出機能
+function detectDeviceSettings() {
+    const device = AppState.device;
+
+    // カラースキーム検出
+    device.colorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+    // アニメーション減少設定
+    device.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // ハイコントラスト設定
+    device.highContrast = window.matchMedia('(prefers-contrast: high)').matches;
+
+    // 強制色設定
+    device.forcedColors = window.matchMedia('(forced-colors: active)').matches;
+
+    // タッチデバイス検出
+    device.touchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+
+    // 画面サイズ検出
+    const width = window.innerWidth;
+    if (width < 768) {
+        device.screenSize = 'mobile';
+    } else if (width < 1024) {
+        device.screenSize = 'tablet';
+    } else {
+        device.screenSize = 'desktop';
+    }
+
+    // デバイスピクセル比
+    device.pixelRatio = window.devicePixelRatio || 1;
+
+    // ネットワーク接続（サポートされている場合）
+    if ('connection' in navigator) {
+        device.connection = navigator.connection.effectiveType || 'unknown';
+    }
+
+    // 言語設定
+    device.language = navigator.language || 'ja';
+
+    // タイムゾーン
+    device.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
+
+    console.log('デバイス設定を検出しました:', device);
+}
+
+// デバイス設定の適用
+function applyDeviceSettings() {
+    const device = AppState.device;
+
+    // タッチデバイス用のCSS変数を設定
+    document.documentElement.style.setProperty('--touch-device', device.touchDevice ? '1' : '0');
+
+    // 画面サイズに応じたCSS変数
+    document.documentElement.style.setProperty('--screen-size', device.screenSize);
+
+    // デバイスピクセル比
+    document.documentElement.style.setProperty('--pixel-ratio', device.pixelRatio);
+
+    // カラースキーム
+    if (device.colorScheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+
+    console.log('デバイス設定を適用しました');
+}
+
+// デバイス情報表示の更新
+function updateDeviceInfoDisplay() {
+    const deviceInfo = document.getElementById('device-info');
+    if (!deviceInfo) return;
+
+    const device = AppState.device;
+
+    deviceInfo.innerHTML = `
+        <div class="device-detail">
+            <strong>📱 タッチデバイス:</strong> ${device.touchDevice ? 'はい' : 'いいえ'}
+        </div>
+        <div class="device-detail">
+            <strong>📏 画面サイズ:</strong> ${device.screenSize} (${window.innerWidth}×${window.innerHeight})
+        </div>
+        <div class="device-detail">
+            <strong>🎨 カラースキーム:</strong> ${device.colorScheme}
+        </div>
+        <div class="device-detail">
+            <strong>🌐 言語:</strong> ${device.language}
+        </div>
+        <div class="device-detail">
+            <strong>🔗 接続:</strong> ${device.connection}
+        </div>
+    `;
+}
+
+// デバイス設定パネルの表示切り替え
+function toggleDeviceSettingsPanel() {
+    const panel = document.getElementById('device-settings-panel');
+    if (!panel) return;
+
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        detectDeviceSettings();
+        updateDeviceInfoDisplay();
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+// デバッグ表示機能
+function showDebug() {
+    const debugInfo = {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        deviceSettings: AppState.device,
+        appState: {
+            partsCount: AppState.data.parts.length,
+            sentencesCount: AppState.data.sentences.length,
+            audioFilesCount: AppState.data.audioFiles.size
+        },
+        performance: {
+            loadTime: performance.now(),
+            memory: performance.memory ? {
+                used: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + 'MB',
+                total: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024) + 'MB'
+            } : 'N/A'
+        }
+    };
+
+    console.log('🔍 デバッグ情報:', debugInfo);
+
+    // デバッグ情報をモーダルで表示
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        z-index: 10002;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+    `;
+
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        ">
+            <h3 style="margin-top: 0; color: #2196F3;">🔍 デバッグ情報</h3>
+            <pre style="
+                background: #f5f5f5;
+                padding: 15px;
+                border-radius: 4px;
+                overflow-x: auto;
+                font-size: 12px;
+                line-height: 1.4;
+            ">${JSON.stringify(debugInfo, null, 2)}</pre>
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="this.closest('div').parentElement.remove()" style="
+                    background: #2196F3;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">閉じる</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // クリックで閉じる
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
 }
 
