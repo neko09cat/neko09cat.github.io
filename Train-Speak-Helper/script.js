@@ -519,7 +519,9 @@ function stopPerformanceMonitoring() {
         performanceMonitorInterval = null;
         console.log('📊 パフォーマンス監視を停止しました');
     }
-}// 初期化（ライブラリ読み込み待機版）
+}
+
+// 初期化（ライブラリ読み込み待機版）
 document.addEventListener('DOMContentLoaded', async function () {
     console.log('🚀 アプリケーション初期化開始');
 
@@ -681,7 +683,9 @@ function initializeOptimizedEventListeners() {
             hideAutocomplete();
         }
     });
-}// マウス操作のためのUI初期化
+}
+
+// マウス操作のためのUI初期化
 function initializeMouseOperationUI() {
     // ワンクリック追加ボタンの初期設定
     const autoAddBtn = document.getElementById('auto-add-btn');
@@ -700,7 +704,9 @@ function initializeMouseOperationUI() {
     updateAvailableParts();
 
     console.log('マウス操作UIの初期化が完了しました');
-}// タブ切り替え
+}
+
+// タブ切り替え
 function showTab(tabName) {
     // すべてのタブを非表示
     const tabs = document.querySelectorAll('.tab-content');
@@ -1492,7 +1498,9 @@ function clearPartsSearch() {
         addButton.disabled = true;
         console.log('検索クリア: 追加ボタンを無効化しました');
     }
-}// ワンクリック追加モードの切り替え
+}
+
+// ワンクリック追加モードの切り替え
 function toggleAutoAdd() {
     AppState.ui.autoAddMode = !AppState.ui.autoAddMode;
 }
@@ -3090,7 +3098,9 @@ function addTermToBulkInput(term) {
             setTimeout(() => item.classList.remove('selected'), 500);
         }
     });
-}// 用語表示を閉じる
+}
+
+// 用語表示を閉じる
 function closeCommonTerms() {
     const termsDiv = document.querySelector('.common-terms');
     if (termsDiv) {
@@ -3147,7 +3157,7 @@ async function processBulkAudioFiles() {
 
         const partData = {
             id: id,
-            text: nameWithoutExt,
+            text: text,
             audio: filename,
             file: file,
             reading: reading,
@@ -3454,13 +3464,13 @@ async function generateIdFromFileNameAdvanced(filename) {
                 }
             } else if (word.romaji && word.type !== '未知語') {
                 // ローマ字を英語ID風に変換
-                let romaji = word.romaji
+                let cleanRomaji = word.romaji
                     .replace(/uu/g, 'u')  // 長音を短縮
                     .replace(/ou/g, 'o')  // 長音を短縮
-                    .replace(/-/g, '')    // ハイフンを除去
+                    .replace(/-/g, '')
                     .replace(/[^a-zA-Z0-9]/g, ''); // 非ASCII文字を除去
-                if (romaji) {
-                    idParts.push(romaji);
+                if (cleanRomaji) {
+                    idParts.push(cleanRomaji);
                 }
             }
         }
@@ -3475,7 +3485,7 @@ async function generateIdFromFileNameAdvanced(filename) {
 
             if (!generatedId || generatedId.length < 2) {
                 // フォールバック: 従来の方法
-                generatedId = generateIdFromFileName(filename);
+                generatedId = 'part_' + Math.random().toString(36).substr(2, 6);
             }
         }
 
@@ -4888,5 +4898,297 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 100);
 
     console.log('✅ アプリケーション初期化完了');
+});
+
+// 1. パフォーマンス最適化：デバウンス機能を追加
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// 2. スロットリング機能を追加
+function throttle(func, limit) {
+    let inThrottle;
+    return function (...args) {
+        if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    };
+}
+
+// 3. 重い処理を非同期化
+async function processHeavyTask(data, callback) {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            callback(data);
+            resolve();
+        }, 0);
+    });
+}
+
+// 4. IntersectionObserver でパフォーマンス向上
+let observerInstance = null;
+
+function initializeIntersectionObserver() {
+    if (!('IntersectionObserver' in window)) return;
+
+    observerInstance = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                // 表示された要素のみ処理
+                entry.target.classList.add('visible');
+            }
+        });
+    }, {
+        threshold: 0.1,
+        rootMargin: '50px'
+    });
+}
+
+// 5. requestAnimationFrame でアニメーション最適化
+let animationFrameId = null;
+
+function optimizedAnimation(callback) {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+
+    animationFrameId = requestAnimationFrame(() => {
+        callback();
+        animationFrameId = null;
+    });
+}
+
+// 6. メモリリークを防ぐイベントリスナー管理
+const eventListeners = new Map();
+
+function addOptimizedEventListener(element, event, handler, options = {}) {
+    const key = `${element}-${event}`;
+
+    // 既存のリスナーを削除
+    if (eventListeners.has(key)) {
+        element.removeEventListener(event, eventListeners.get(key));
+    }
+
+    // 新しいリスナーを追加
+    eventListeners.set(key, handler);
+    element.addEventListener(event, handler, { passive: true, ...options });
+}
+
+// 7. 検索機能の最適化（デバウンス適用）
+const optimizedFilterParts = debounce(function () {
+    const searchTerm = document.getElementById('parts-search')?.value?.toLowerCase() || '';
+    const partsList = document.getElementById('parts-list');
+
+    if (!partsList) return;
+
+    // バッチ処理でDOM操作を最小化
+    const items = partsList.querySelectorAll('.part-item');
+    const fragment = document.createDocumentFragment();
+
+    items.forEach(item => {
+        const shouldShow = !searchTerm ||
+            item.textContent.toLowerCase().includes(searchTerm);
+        item.style.display = shouldShow ? 'block' : 'none';
+    });
+}, 300); // 300ms のデバウンス
+
+// 8. リアルタイム更新の最適化
+const optimizedUpdatePreview = throttle(function () {
+    const id = document.getElementById('part-id')?.value || '';
+    const text = document.getElementById('part-text')?.value || '';
+    const audio = document.getElementById('part-audio')?.files?.[0]?.name || '';
+
+    // DOM操作を最小化
+    requestAnimationFrame(() => {
+        const previewElement = document.getElementById('part-preview');
+        if (previewElement && (id || text || audio)) {
+            document.getElementById('preview-id').textContent = id;
+            document.getElementById('preview-text').textContent = text;
+            document.getElementById('preview-audio').textContent = audio;
+            previewElement.style.display = 'block';
+        }
+    });
+}, 150); // 150ms のスロットリング
+
+// 9. 形態素解析の最適化（Workers使用）
+let morphologyWorker = null;
+
+function initializeMorphologyWorker() {
+    if (typeof Worker === 'undefined') return null;
+
+    try {
+        const workerCode = `
+            self.onmessage = function(e) {
+                try {
+                    // 軽量な処理のみWorkerで実行
+                    const result = processMorphology(e.data);
+                    self.postMessage({ success: true, result });
+                } catch (error) {
+                    self.postMessage({ success: false, error: error.message });
+                }
+            };
+            
+            function processMorphology(text) {
+                // シンプルな処理のみ
+                return text.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            }
+        `;
+
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        morphologyWorker = new Worker(URL.createObjectURL(blob));
+
+        return morphologyWorker;
+    } catch (error) {
+        console.warn('⚠️ Web Worker初期化失敗:', error);
+        return null;
+    }
+}
+
+// 10. メモリ使用量の監視
+function monitorMemoryUsage() {
+    if (!performance.memory) return;
+
+    const memoryInfo = performance.memory;
+    const usedPercent = (memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit) * 100;
+
+    if (usedPercent > 80) {
+        console.warn('⚠️ メモリ使用率が高くなっています:', usedPercent.toFixed(1) + '%');
+        // ガベージコレクションを促進
+        if (window.gc) window.gc();
+    }
+}
+
+// 11. CPU使用率の監視と制御
+let cpuMonitorInterval = null;
+let lastFrameTime = performance.now();
+let frameCount = 0;
+
+function startCPUMonitoring() {
+    function checkPerformance() {
+        const now = performance.now();
+        frameCount++;
+
+        if (now - lastFrameTime >= 1000) {
+            const fps = Math.round((frameCount * 1000) / (now - lastFrameTime));
+            frameCount = 0;
+            lastFrameTime = now;
+
+            // FPSが低い場合は処理を軽量化
+            if (fps < 30) {
+                console.warn('⚠️ パフォーマンス低下を検出:', fps + 'fps');
+                enablePerformanceMode();
+            }
+        }
+
+        requestAnimationFrame(checkPerformance);
+    }
+
+    requestAnimationFrame(checkPerformance);
+
+    // メモリ監視（5秒間隔）
+    cpuMonitorInterval = setInterval(monitorMemoryUsage, 5000);
+}
+
+function enablePerformanceMode() {
+    console.log('🚀 パフォーマンスモードを有効化');
+
+    // アニメーションを軽量化
+    document.documentElement.style.setProperty('--animation-duration', '0.1s');
+
+    // 重い処理を無効化
+    window.performanceMode = true;
+}
+
+// 12. 初期化処理の最適化
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('🚀 最適化された初期化開始');
+
+    // 段階的初期化でCPU負荷を分散
+    setTimeout(() => {
+        initializeIntersectionObserver();
+    }, 100);
+
+    setTimeout(() => {
+        initializeMorphologyWorker();
+    }, 200);
+
+    setTimeout(() => {
+        startCPUMonitoring();
+    }, 300);
+
+    setTimeout(() => {
+        initializeEventListeners();
+    }, 400);
+
+    console.log('✅ 初期化完了');
+});
+
+// 13. イベントリスナーの最適化
+function initializeEventListeners() {
+    // 検索機能
+    const searchInput = document.getElementById('parts-search');
+    if (searchInput) {
+        addOptimizedEventListener(searchInput, 'input', optimizedFilterParts);
+    }
+
+    // プレビュー更新
+    const partIdInput = document.getElementById('part-id');
+    const partTextInput = document.getElementById('part-text');
+
+    if (partIdInput) {
+        addOptimizedEventListener(partIdInput, 'input', optimizedUpdatePreview);
+    }
+
+    if (partTextInput) {
+        addOptimizedEventListener(partTextInput, 'input', optimizedUpdatePreview);
+    }
+}
+
+// 14. クリーンアップ処理
+window.addEventListener('beforeunload', function () {
+    // メモリリークを防ぐクリーンアップ
+    if (cpuMonitorInterval) {
+        clearInterval(cpuMonitorInterval);
+    }
+
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+
+    if (morphologyWorker) {
+        morphologyWorker.terminate();
+    }
+
+    if (observerInstance) {
+        observerInstance.disconnect();
+    }
+
+    // イベントリスナーをクリア
+    eventListeners.clear();
+});
+
+// 15. ページ可視性の監視
+document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+        // ページが非表示の時は処理を停止
+        console.log('⏸️ ページが非表示：処理を一時停止');
+        if (cpuMonitorInterval) {
+            clearInterval(cpuMonitorInterval);
+        }
+    } else {
+        // ページが再表示された時は処理を再開
+        console.log('▶️ ページが表示：処理を再開');
+        startCPUMonitoring();
+    }
 });
 

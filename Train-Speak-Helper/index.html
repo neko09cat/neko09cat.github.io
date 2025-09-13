@@ -2,27 +2,24 @@
 <html lang="ja_JP">
 
 <head>
+    <!-- メタタグ最適化 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="車内自動放送プレイヤー用のZipファイル作成ツール。設定ファイル（config.json）と音声ファイルから構成されたZipファイルを簡単に作成できます。">
-    <meta name="keywords" content="車内放送,自動放送,プレイヤー,設定ツール,音声ファイル,config.json">
-    <meta name="author" content="Train-Speak Helper">
-    <meta name="robots" content="index, follow">
 
-    <!-- OGP Meta Tags -->
-    <meta property="og:title" content="車内自動放送プレイヤー構成ヘルパー">
-    <meta property="og:description" content="車内自動放送プレイヤー用のZipファイル作成ツール">
-    <meta property="og:type" content="website">
-    <meta property="og:locale" content="ja_JP">
+    <!-- パフォーマンス改善 -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="theme-color" content="#2196F3">
 
-    <!-- 最適化 -->
-    <meta name="theme-color" content="var(--primary-color)">
-    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <!-- プリロード・プリコネクト最適化 -->
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+
+    <!-- CSS最適化 -->
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preload" href="styles.css" as="style">
 
     <title>車内自動放送プレイヤー構成ヘルパー</title>
-
-    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
@@ -893,50 +890,63 @@
         </div>
     </div>
 
-    <!-- 外部ライブラリ - 非同期読み込みで最適化 -->
+    <!-- 最適化されたライブラリ読み込み -->
     <script>
-        // ライブラリの非同期読み込み管理
+        // パフォーマンス監視
+        const perfObserver = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            entries.forEach(entry => {
+                if (entry.duration > 50) {
+                    console.warn('⚠️ 重い処理を検出:', entry.name, entry.duration + 'ms');
+                }
+            });
+        });
+
+        if ('observe' in perfObserver) {
+            perfObserver.observe({ entryTypes: ['measure', 'navigation'] });
+        }
+
+        // ライブラリの効率的読み込み
         const LibraryLoader = {
             loaded: new Set(),
             loading: new Set(),
 
-            async loadScript(src, name) {
-                if (this.loaded.has(name)) {
-                    return Promise.resolve();
+            async loadScript(src, name, retries = 2) {
+                if (this.loaded.has(name)) return Promise.resolve();
+
+                for (let i = 0; i <= retries; i++) {
+                    try {
+                        await this._loadSingleScript(src, name);
+                        return;
+                    } catch (error) {
+                        if (i === retries) throw error;
+                        console.warn(`⚠️ ${name} 読み込み失敗、再試行中... (${i + 1}/${retries + 1})`);
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                    }
                 }
+            },
 
-                if (this.loading.has(name)) {
-                    return new Promise(resolve => {
-                        const checkLoaded = () => {
-                            if (this.loaded.has(name)) {
-                                resolve();
-                            } else {
-                                setTimeout(checkLoaded, 50);
-                            }
-                        };
-                        checkLoaded();
-                    });
-                }
-
-                this.loading.add(name);
-
+            _loadSingleScript(src, name) {
                 return new Promise((resolve, reject) => {
                     const script = document.createElement('script');
                     script.src = src;
                     script.async = true;
-                    script.crossorigin = 'anonymous';
+                    script.crossOrigin = 'anonymous';
+
+                    const timeout = setTimeout(() => {
+                        reject(new Error(`${name} loading timeout`));
+                    }, 10000); // 10秒タイムアウト
 
                     script.onload = () => {
+                        clearTimeout(timeout);
                         this.loaded.add(name);
-                        this.loading.delete(name);
-                        console.log(`📚 ${name} ライブラリが読み込まれました`);
+                        console.log(`✅ ${name} 読み込み完了`);
                         resolve();
                     };
 
                     script.onerror = () => {
-                        this.loading.delete(name);
-                        console.error(`❌ ${name} ライブラリの読み込みに失敗しました`);
-                        reject(new Error(`Failed to load ${name}`));
+                        clearTimeout(timeout);
+                        reject(new Error(`${name} loading failed`));
                     };
 
                     document.head.appendChild(script);
@@ -944,85 +954,73 @@
             }
         };
 
-        // ライブラリの順次読み込み（GitHub Pages対応版）
-        async function loadLibraries() {
+        // 最適化されたライブラリ読み込み
+        async function loadLibrariesOptimized() {
             try {
-                console.log('📚 外部ライブラリの読み込みを開始...');
+                console.log('📚 ライブラリ読み込み開始');
 
-                // GitHub Pagesの環境検出
-                const isGitHubPages = window.location.hostname.includes('github.io');
-                if (isGitHubPages) {
-                    console.log('🏠 GitHub Pages環境を検出しました');
-                }
-
-                // JSZip ライブラリを先に読み込み（必須）- 複数CDNでフォールバック
-                try {
-                    await LibraryLoader.loadScript(
+                // 必須ライブラリのみ先行読み込み
+                const cdnUrls = {
+                    jszip: [
                         'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-                        'JSZip'
-                    );
-                } catch (jszipError) {
-                    console.warn('⚠️ JSZip主要CDNで失敗、代替CDNを試行中...');
-                    try {
-                        await LibraryLoader.loadScript(
-                            'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js',
-                            'JSZip'
-                        );
-                    } catch (jszipError2) {
-                        throw new Error('JSZipライブラリの読み込みに完全に失敗しました');
-                    }
-                }
-
-                // Kuromoji ライブラリを読み込み（形態素解析用、エラーでも継続）- 複数CDNでフォールバック
-                try {
-                    await LibraryLoader.loadScript(
+                        'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'
+                    ],
+                    kuromoji: [
                         'https://unpkg.com/kuromoji@0.1.2/build/kuromoji.js',
-                        'Kuromoji'
-                    );
-                    console.log('✅ すべてのライブラリが正常に読み込まれました');
-                } catch (kuromojiError) {
-                    console.warn('⚠️ Kuromoji主要CDNで失敗、代替CDNを試行中...');
+                        'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js'
+                    ]
+                };
+
+                // JSZip優先読み込み
+                let jszipLoaded = false;
+                for (const url of cdnUrls.jszip) {
                     try {
-                        await LibraryLoader.loadScript(
-                            'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js',
-                            'Kuromoji'
-                        );
-                        console.log('✅ Kuromoji代替CDNから読み込み成功');
-                    } catch (kuromojiError2) {
-                        console.warn('⚠️ Kuromoji読み込み失敗（フォールバック機能を使用）:', kuromojiError2);
-                        // Kuromojiが読み込めなくても、アプリケーションは動作する
+                        await LibraryLoader.loadScript(url, 'JSZip');
+                        jszipLoaded = true;
+                        break;
+                    } catch (error) {
+                        console.warn('JSZip CDN失敗:', url);
                     }
                 }
 
-                // ライブラリ読み込み完了を全体に通知
-                window.dispatchEvent(new CustomEvent('librariesLoaded', {
-                    detail: {
-                        jszip: LibraryLoader.loaded.has('JSZip'),
-                        kuromoji: LibraryLoader.loaded.has('Kuromoji')
-                    }
-                }));
+                if (!jszipLoaded) {
+                    throw new Error('JSZip読み込み完全失敗');
+                }
 
-                console.log('🚀 ライブラリ読み込み処理完了');
+                // Kuromojiは非同期で読み込み（エラーでも継続）
+                setTimeout(async () => {
+                    for (const url of cdnUrls.kuromoji) {
+                        try {
+                            await LibraryLoader.loadScript(url, 'Kuromoji');
+                            break;
+                        } catch (error) {
+                            console.warn('Kuromoji CDN失敗:', url);
+                        }
+                    }
+                }, 100);
+
+                console.log('✅ 必須ライブラリ読み込み完了');
+
             } catch (error) {
-                console.error('❌ 必須ライブラリ読み込みエラー:', error);
-                // JSZipが読み込めない場合は重大なエラー
-                window.dispatchEvent(new CustomEvent('libraryLoadError', {
-                    detail: { error }
-                }));
+                console.error('❌ ライブラリ読み込みエラー:', error);
             }
         }
 
-        // ライブラリ読み込みを開始
-        loadLibraries();
+        // 段階的読み込み開始
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadLibrariesOptimized);
+        } else {
+            loadLibrariesOptimized();
+        }
     </script>
 
-    <!-- メインアプリケーション -->
+    <!-- メインスクリプト -->
     <script src="script.js" defer></script>
 
-    <!-- サービスワーカー -->
+    <!-- Service Worker -->
     <script>
         if ('serviceWorker' in navigator && location.protocol === 'https:') {
-            navigator.serviceWorker.register('sw.js');
+            navigator.serviceWorker.register('sw.js').catch(console.warn);
         }
     </script>
 </body>
