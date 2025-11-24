@@ -199,7 +199,7 @@ ul a[href*="Train-Speak"]:hover::after {
     opacity: 1;
     filter: hue-rotate(10deg) saturate(1);
 }
-ul a[href*="Robocon-Score-LCD"]::after{
+ul a[href^="Robocon-Score-LCD"]::after{
     content: '🤖';
     position: absolute;
     right: var(--spacing-md);
