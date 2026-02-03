@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://site.neko09cat.com/sitemap.xml
