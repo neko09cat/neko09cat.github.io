@@ -1,0 +1,3 @@
+[submodule "Robocon-Score-LCD-V2-App"]
+	path = Robocon-Score-LCD-V2-App
+	url = https://github.com/neko09cat/Robocon-Score-LCD-V2-App.git
