@@ -1,0 +1,10 @@
+{
+  "buildDate": "2026-02-15T15:04:10.366Z",
+  "version": "1.0.0",
+  "files": [
+    "index.html",
+    "app.js",
+    "style.css",
+    "node_modules/blockly/**"
+  ]
+}

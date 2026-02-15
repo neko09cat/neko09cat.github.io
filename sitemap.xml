@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://site.neko09cat.com/</loc>
-    <lastmod>2026-01-20</lastmod>
+    <lastmod>2026-02-16</lastmod>
   </url>
   <url>
     <loc>https://site.neko09cat.com/Train-Speak/</loc>
@@ -15,5 +15,9 @@
   <url>
     <loc>https://site.neko09cat.com/Robocon-Score-LCD-V2-App/</loc>
     <lastmod>2026-02-14</lastmod>
+  </url>
+  <url>
+    <loc>https://site.neko09cat.com/Train-Station-Player-Settings/</loc>
+    <lastmod>2026-02-16</lastmod>
   </url>
 </urlset>

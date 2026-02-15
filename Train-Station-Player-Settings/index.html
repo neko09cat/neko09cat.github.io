@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train Station Player Settings - Blockly</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="node_modules/blockly/blockly_compressed.js"></script>
+    <script src="node_modules/blockly/blocks_compressed.js"></script>
+    <script src="node_modules/blockly/javascript_compressed.js"></script>
+    <script src="node_modules/blockly/msg/ja.js"></script>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-QY1LWBDCSN"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-QY1LWBDCSN');
+    </script>
+</head>
+
+<body>
+    <div id="container">
+        <header>
+            <div class="header-content">
+                <div class="header-title">
+                    <h1>🚆 Train Station Player Settings</h1>
+                    <p>駅プレーヤー設定ツール - 音声パーツとテンプレートの管理</p>
+                </div>
+                <nav id="tabs">
+                    <button class="tab-button active" data-tab="audio">
+                        <span class="tab-icon">🎵</span>
+                        音声パーツ管理
+                    </button>
+                    <button class="tab-button" data-tab="template">
+                        <span class="tab-icon">📋</span>
+                        文章パターン管理
+                    </button>
+                </nav>
+            </div>
+        </header>
+
+        <div id="main-content">
+            <!-- Audio Parts Definition Tab -->
+            <div id="audio-tab" class="tab-content active">
+                <div id="audio-editor">
+                    <div class="section-card">
+                        <h2>🎵 音声パーツ管理</h2>
+
+                        <div class="add-part-section">
+                            <h3>新しいパーツを追加</h3>
+                            <form id="addPartForm" class="part-form">
+                                <div class="form-row">
+                                    <div class="form-field">
+                                        <label for="partId">ID <span class="required">*</span></label>
+                                        <input type="text" id="partId" placeholder="例: nagoya" required
+                                            pattern="[a-zA-Z0-9_]+" title="英数字とアンダースコアのみ">
+                                        <small>英数字とアンダースコアのみ使用可能</small>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label for="partText">表示テキスト <span class="required">*</span></label>
+                                        <input type="text" id="partText" placeholder="例: 名古屋" required>
+                                        <small>プレイヤーで表示されるテキスト</small>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label for="partAudio">音声ファイル <span class="required">*</span></label>
+                                        <input type="text" id="partAudio" placeholder="例: 名古屋.wav" required>
+                                        <small>音声ファイル名（.wav, .mp3など）</small>
+                                    </div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">✨ パーツを追加</button>
+                                    <button type="button" id="clearForm" class="btn btn-secondary">🗑️ クリア</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="parts-list-section">
+                            <div class="section-header">
+                                <h3>登録済みパーツ一覧</h3>
+                                <div class="toolbar-actions">
+                                    <button id="saveAudio" class="btn btn-success">💾 audio.jsonを保存</button>
+                                    <button id="loadAudio" class="btn btn-secondary">📂 audio.jsonを読み込み</button>
+                                </div>
+                            </div>
+                            <div id="parts-list" class="parts-grid">
+                                <!-- Parts will be added here dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Template Blockly Tab -->
+            <div id="template-tab" class="tab-content">
+                <div id="blockly-section">
+                    <div id="blockly-area">
+                        <div id="blocklyDiv"></div>
+                    </div>
+                    <div id="control-panel">
+                        <div class="button-group">
+                            <button id="generateTemplate" class="btn btn-primary">テンプレート生成</button>
+                            <button id="saveTemplate" class="btn btn-success">template.jsonを保存</button>
+                            <button id="loadTemplate" class="btn btn-secondary">template.jsonを読み込み</button>
+                        </div>
+
+                        <div id="parts-info-section">
+                            <h3>📚 登録済みパーツ一覧</h3>
+                            <div id="parts-info-list">
+                                <!-- Parts info will be displayed here -->
+                            </div>
+                        </div>
+
+                        <div id="output-section">
+                            <h3>生成されたJSON:</h3>
+                            <pre id="generatedCode"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <xml id="toolbox" style="display: none">
+
+    </xml>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
