@@ -225,6 +225,17 @@ ul a[href^="https://site.piltaland.com"]::after {
     transition: opacity 0.3s ease;
 }
 
+ul a[href^="https://site.flitflow.org"]::after {
+    content: '🪽';
+    position: absolute;
+    right: var(--spacing-md);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.5rem;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
 ul a[href^="https://youtube.com"]::after {
     content: '📺';
     position: absolute;
